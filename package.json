@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "doctor": "expo doctor",
+    "doctor": "expo-doctor",
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
     "prepare": "husky"
@@ -47,6 +47,7 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
+    "expo-doctor": "^1.17.14",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
     "prettier": "^3.8.1",
