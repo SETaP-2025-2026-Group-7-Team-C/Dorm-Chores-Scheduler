@@ -1,0 +1,28 @@
+name: EAS Production Build + Submit
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  production_release:
+    if: false # Temporarily disable production release workflow until we are ready to submit to app stores.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: eas build --platform all --profile production --non-interactive
+
+      - run: eas submit --platform all --profile production --non-interactive
