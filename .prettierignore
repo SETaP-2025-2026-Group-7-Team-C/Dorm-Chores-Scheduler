@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.expo
+.github
+.idea
+.vscode
+*.log
