@@ -1,16 +1,40 @@
-# Welcome to your Expo app 👋
+# Dorm Chores Scheduler
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+![](https://img.shields.io/github/stars/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg) ![](https://img.shields.io/github/watchers/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg)
 
-## Get started
+![](https://img.shields.io/github/issues-raw/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg) ![](https://img.shields.io/github/issues-closed-raw/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg) ![](https://img.shields.io/github/issues-pr-raw/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg) ![](https://img.shields.io/github/issues-pr-closed-raw/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.svg)
 
-1. Install dependencies
+## Project Description
+
+Project Description (To be completed)
+
+## Features
+
+Features (To be completed)
+
+## Preview Images
+
+Preview Images (To be completed)
+
+## Installation & Project Setup
+
+1. Clone the repository
+
+   ```bash
+   git clone https://github.com/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.git
+   ```
+
+   ```bash
+   cd Dorm-Chores-Scheduler
+   ```
+
+2. Install dependencies
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Start the app
 
    ```bash
    npx expo start
@@ -21,30 +45,22 @@ In the output, you'll find options to open the app in a
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- [Expo Go](https://expo.dev/go)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Useful Links
 
-## Get a fresh project
+Expo:
 
-When you're ready, run:
+- [Expo Documentation](https://docs.expo.dev/)
+- [Expo Guides](https://docs.expo.dev/guides/)
+- [Expo Tutorials](https://docs.expo.dev/tutorial/)
 
-```bash
-npm run reset-project
-```
+React Native:
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- [React Native Documentation](https://reactnative.dev/docs/getting-started)
+- [React Native Components](https://reactnative.dev/docs/components-and-apis)
+- [React Native Navigation](https://reactnavigation.org/docs/getting-started)
 
-## Learn more
+## License
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+[MIT](LICENSE)
