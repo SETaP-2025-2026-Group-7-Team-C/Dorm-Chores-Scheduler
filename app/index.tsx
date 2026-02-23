@@ -7,7 +7,7 @@ export default function Index() {
       <Text style={styles.title}>Dorm Chores Scheduler</Text>
       <Text style={styles.subtitle}>Edit app/index.tsx to edit this screen.</Text>
 
-      <Link href="/ui-test">
+      <Link href="/ui-tests">
         <Text style={styles.linkText}>Go to UI Test Page</Text>
       </Link>
     </View>

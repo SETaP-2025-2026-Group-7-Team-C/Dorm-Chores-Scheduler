@@ -1,8 +1,8 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import Button from '../components/Button';
-import HeaderBackButton from '../components/HeaderBackButton';
+import Button from '../../components/Button';
+import HeaderBackButton from '../../components/HeaderBackButton';
 
 export default function ButtonTestPage() {
   const handleStandardPress = () => {
@@ -11,6 +11,10 @@ export default function ButtonTestPage() {
 
   const handleSecondaryPress = () => {
     Alert.alert('Secondary Button Pressed!', 'You pressed the secondary button');
+  };
+
+  const handleTertiaryPress = () => {
+    Alert.alert('Tertiary Button Pressed!', 'You pressed the tertiary button');
   };
 
   const handleDangerPress = () => {
@@ -37,6 +41,8 @@ export default function ButtonTestPage() {
           <Button title="Standard Button" onPress={handleStandardPress} variant="standard" />
 
           <Button title="Secondary Button" onPress={handleSecondaryPress} variant="secondary" />
+
+          <Button title="Tertiary Button" onPress={handleTertiaryPress} variant="tertiary" />
 
           <Button title="Danger Button" onPress={handleDangerPress} variant="danger" />
 

@@ -1,8 +1,8 @@
 import { Stack, router } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import HeaderBackButton from '../components/HeaderBackButton';
-import ListItem from '../components/ListItem';
+import HeaderBackButton from '../../components/HeaderBackButton';
+import ListItem from '../../components/ListItem';
 
 export default function UITestHub() {
   return (
@@ -26,14 +26,14 @@ export default function UITestHub() {
             title="Button Component"
             subtitle="Test all button variants and states"
             iconName="square"
-            onPress={() => router.push('/button-test')}
+            onPress={() => router.push('/ui-tests/button-test')}
           />
 
           <ListItem
             title="List Item Component"
             subtitle="Test list item layouts and interactions"
             iconName="list"
-            onPress={() => router.push('/list-item-test')}
+            onPress={() => router.push('/ui-tests/list-item-test')}
           />
         </View>
       </View>

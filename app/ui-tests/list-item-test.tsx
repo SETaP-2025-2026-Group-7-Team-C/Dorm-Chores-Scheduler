@@ -1,8 +1,8 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import HeaderBackButton from '../components/HeaderBackButton';
-import ListItem from '../components/ListItem';
+import HeaderBackButton from '../../components/HeaderBackButton';
+import ListItem from '../../components/ListItem';
 
 export default function ListItemTestPage() {
   const handlePress = (itemName: string) => {
