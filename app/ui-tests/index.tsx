@@ -35,6 +35,13 @@ export default function UITestHub() {
             iconName="list"
             onPress={() => router.push('/ui-tests/list-item-test')}
           />
+
+          <ListItem
+            title="Inline Notification Component"
+            subtitle="Test all notification types and customizations"
+            iconName="bell"
+            onPress={() => router.push('/ui-tests/inline-notification-test')}
+          />
         </View>
       </View>
     </>
