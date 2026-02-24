@@ -2,6 +2,9 @@ site_name: Dorm Chores Schedule Documntation
 site_description: Documentation for the Dorm Chores Schedule project
 site_author: Group 7 (Team C)
 
+theme:
+  name: material
+
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
