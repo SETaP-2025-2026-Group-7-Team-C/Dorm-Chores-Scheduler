@@ -109,6 +109,7 @@ export default function InlineNotificationTest() {
             style={styles.notificationSpacing}
           />
         </View>
+
         <View style={{ height: 50 }} />
       </ScrollView>
     </>
