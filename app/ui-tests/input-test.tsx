@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Button from '../../components/Button';
 import HeaderBackButton from '../../components/HeaderBackButton';
 import Input from '../../components/Input';
+import InputCode from '../../components/InputCode';
 
 export default function InputTest() {
   const [defaultValue, setDefaultValue] = useState('');
@@ -11,6 +12,7 @@ export default function InputTest() {
   const [placeholderValue, setPlaceholderValue] = useState('');
   const [prefilledValue, setPrefilledValue] = useState('Prefilled text content');
   const [hasError, setHasError] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
 
   const toggleError = () => {
     setHasError(!hasError);
@@ -22,6 +24,7 @@ export default function InputTest() {
     setPlaceholderValue('');
     setPrefilledValue('');
     setHasError(false);
+    setCodeValue('');
   };
 
   return (
@@ -128,6 +131,22 @@ export default function InputTest() {
             variant="danger"
             style={styles.buttonSpacing}
           />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Code Input Component</Text>
+          <Text style={styles.description}>6-digit numeric code input with dash formatting</Text>
+
+          <Text style={styles.inputLabel}>Default Code Input:</Text>
+          <InputCode
+            value={codeValue}
+            onChangeText={setCodeValue}
+            onComplete={(code) => console.log('Code completed:', code)}
+            style={styles.inputSpacing}
+          />
+
+          <Text style={styles.inputLabel}>Prefilled Code (123456):</Text>
+          <InputCode value="123456" style={styles.inputSpacing} />
         </View>
 
         <View style={{ height: 50 }} />
