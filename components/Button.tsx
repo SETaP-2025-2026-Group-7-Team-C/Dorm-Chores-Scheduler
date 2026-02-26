@@ -1,7 +1,45 @@
+/**
+ * @file Button.tsx
+ * @description A customizable button component with multiple visual variants and press states.
+ *              Supports standard, secondary, tertiary, and danger styles with automatic
+ *              border highlighting on press.
+ *
+ * @usage
+ * ```tsx
+ * import Button from '@/components/Button';
+ *
+ * // Standard button
+ * <Button title="Submit" onPress={() => console.log('pressed')} />
+ *
+ * // Secondary variant
+ * <Button title="Cancel" onPress={handleCancel} variant="secondary" />
+ *
+ * // Disabled button
+ * <Button title="Loading..." onPress={() => {}} disabled />
+ *
+ * // Custom styling
+ * <Button
+ *   title="Custom"
+ *   onPress={handlePress}
+ *   style={{ marginTop: 16 }}
+ *   textStyle={{ fontSize: 18 }}
+ * />
+ * ```
+ *
+ * @props
+ * - title: string - The text displayed on the button
+ * - onPress: () => void - Callback function triggered on button press
+ * - variant?: 'standard' | 'secondary' | 'tertiary' | 'danger' - Visual style variant (default: 'standard')
+ * - style?: ViewStyle - Custom styles for the button wrapper
+ * - textStyle?: TextStyle - Custom styles for the button text
+ * - disabled?: boolean - Whether the button is disabled (default: false)
+ */
+
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { COLOURS } from '../constants/colours';
 
+/** Available button style variants */
 type ButtonVariant = 'standard' | 'secondary' | 'tertiary' | 'danger';
 
 interface ButtonProps {
@@ -21,8 +59,12 @@ export default function Button({
   textStyle,
   disabled = false,
 }: ButtonProps) {
+  // Track press state for border highlight effect
   const [isPressed, setIsPressed] = useState(false);
 
+  /**
+   * Returns the appropriate background style based on button variant and disabled state
+   */
   const getButtonStyle = () => {
     if (disabled) return styles.disabled;
 
@@ -39,6 +81,9 @@ export default function Button({
     }
   };
 
+  /**
+   * Returns the text color based on button variant and disabled state
+   */
   const getTextColor = () => {
     if (disabled) return COLOURS.disabled;
 
@@ -55,6 +100,9 @@ export default function Button({
     }
   };
 
+  /**
+   * Returns the border color for the press highlight effect
+   */
   const getBorderColor = () => {
     if (disabled) return styles.disabled.backgroundColor;
     switch (variant) {
@@ -71,7 +119,9 @@ export default function Button({
   };
 
   return (
+    // Outer wrapper for custom styling
     <View style={[styles.wrapper, style]}>
+      {/* Border container that shows highlight effect when pressed */}
       <View
         style={[
           styles.borderContainer,
@@ -82,6 +132,7 @@ export default function Button({
             },
         ]}
       >
+        {/* Main touchable button element */}
         <TouchableOpacity
           style={[styles.button, getButtonStyle()]}
           onPress={onPress}

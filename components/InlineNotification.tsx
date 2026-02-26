@@ -1,8 +1,48 @@
+/**
+ * @file InlineNotification.tsx
+ * @description A notification banner component for displaying contextual messages.
+ *              Supports multiple notification types (error, warning, info, success, tip)
+ *              with automatic color theming and icons. Designed for inline form validation,
+ *              alerts, and informational messages.
+ *
+ * @usage
+ * ```tsx
+ * import InlineNotification from '@/components/InlineNotification';
+ *
+ * // Error notification
+ * <InlineNotification type="error" text="Invalid email address" />
+ *
+ * // Success notification
+ * <InlineNotification type="success" text="Account created successfully!" />
+ *
+ * // Warning with custom icon
+ * <InlineNotification
+ *   type="warning"
+ *   text="Your session will expire soon"
+ *   iconName="clock"
+ * />
+ *
+ * // Info notification with custom styling
+ * <InlineNotification
+ *   type="info"
+ *   text="Updates available"
+ *   style={{ marginTop: 16 }}
+ * />
+ * ```
+ *
+ * @props
+ * - type: 'error' | 'warning' | 'info' | 'success' | 'tip' - Notification type (determines colors and default icon)
+ * - text: string - The notification message to display
+ * - iconName?: keyof FontAwesome5.glyphMap - Custom icon override (defaults based on type)
+ * - style?: ViewStyle - Custom styles for the notification container
+ */
+
 import { FontAwesome5 } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { COLOURS } from '../constants/colours';
 
+/** Available notification type variants */
 type NotificationType = 'error' | 'warning' | 'info' | 'success' | 'tip';
 
 interface InlineNotificationProps {
@@ -18,6 +58,10 @@ export default function InlineNotification({
   iconName,
   style,
 }: InlineNotificationProps) {
+  /**
+   * Returns the appropriate FontAwesome5 icon name based on notification type.
+   * Custom iconName prop takes precedence if provided.
+   */
   const getIconName = (): keyof typeof FontAwesome5.glyphMap => {
     if (iconName) return iconName;
 
@@ -37,6 +81,10 @@ export default function InlineNotification({
     }
   };
 
+  /**
+   * Returns the color scheme (background, text, icon) based on notification type.
+   * Each type has a distinct visual theme for clear communication.
+   */
   const getStylesForType = () => {
     switch (type) {
       case 'error':
@@ -81,7 +129,9 @@ export default function InlineNotification({
   const typeStyles = getStylesForType();
 
   return (
+    // Main container with type-specific background color
     <View style={[styles.container, { backgroundColor: typeStyles.backgroundColor }, style]}>
+      {/* Icon container with fixed width for consistent alignment */}
       <View style={styles.iconContainer}>
         <FontAwesome5
           name={getIconName()}
