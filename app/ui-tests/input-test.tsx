@@ -10,11 +10,18 @@ import { COLOURS } from '../../constants/colours';
 
 export default function InputTest() {
   const [defaultValue, setDefaultValue] = useState('');
+  const [focusValue, setFocusValue] = useState('');
   const [errorValue, setErrorValue] = useState('');
   const [placeholderValue, setPlaceholderValue] = useState('');
+  const [longPlaceholderValue, setLongPlaceholderValue] = useState('');
+  const [emptyPlaceholderValue, setEmptyPlaceholderValue] = useState('');
   const [prefilledValue, setPrefilledValue] = useState('Prefilled text content');
+  const [emailValue, setEmailValue] = useState('');
+  const [numberValue, setNumberValue] = useState('');
+  const [passwordValue, setPasswordValue] = useState('');
   const [hasError, setHasError] = useState(false);
   const [codeValue, setCodeValue] = useState('');
+  const [prefilledCodeValue, setPrefilledCodeValue] = useState('123456');
 
   const toggleError = () => {
     setHasError(!hasError);
@@ -22,11 +29,18 @@ export default function InputTest() {
 
   const clearAllInputs = () => {
     setDefaultValue('');
+    setFocusValue('');
     setErrorValue('');
     setPlaceholderValue('');
+    setLongPlaceholderValue('');
+    setEmptyPlaceholderValue('');
     setPrefilledValue('');
+    setEmailValue('');
+    setNumberValue('');
+    setPasswordValue('');
     setHasError(false);
     setCodeValue('');
+    setPrefilledCodeValue('');
   };
 
   return (
@@ -71,7 +85,11 @@ export default function InputTest() {
         <Spacer size="medium" />
 
         <View style={styles.content}>
-          <Input placeholder="Click to focus and see border change" />
+          <Input
+            value={focusValue}
+            onChangeText={setFocusValue}
+            placeholder="Click to focus and see border change"
+          />
         </View>
 
         <Spacer size="large" />
@@ -120,11 +138,19 @@ export default function InputTest() {
 
           <Spacer size="medium" />
 
-          <Input placeholder="This is a much longer placeholder text to demonstrate how it handles overflow" />
+          <Input
+            value={longPlaceholderValue}
+            onChangeText={setLongPlaceholderValue}
+            placeholder="This is a much longer placeholder text to demonstrate how it handles overflow"
+          />
 
           <Spacer size="medium" />
 
-          <Input placeholder="" />
+          <Input
+            value={emptyPlaceholderValue}
+            onChangeText={setEmptyPlaceholderValue}
+            placeholder=""
+          />
         </View>
 
         <Spacer size="large" />
@@ -157,6 +183,8 @@ export default function InputTest() {
           <Spacer size="small" />
 
           <Input
+            value={emailValue}
+            onChangeText={setEmailValue}
             placeholder="Enter your email"
             keyboardType="email-address"
             autoCapitalize="none"
@@ -168,7 +196,12 @@ export default function InputTest() {
 
           <Spacer size="small" />
 
-          <Input placeholder="Enter number" keyboardType="numeric" />
+          <Input
+            value={numberValue}
+            onChangeText={setNumberValue}
+            placeholder="Enter number"
+            keyboardType="numeric"
+          />
 
           <Spacer size="medium" />
 
@@ -176,7 +209,12 @@ export default function InputTest() {
 
           <Spacer size="small" />
 
-          <Input placeholder="Enter password" secureTextEntry />
+          <Input
+            value={passwordValue}
+            onChangeText={setPasswordValue}
+            placeholder="Enter password"
+            secureTextEntry
+          />
         </View>
 
         <Spacer size="large" />
@@ -216,7 +254,7 @@ export default function InputTest() {
 
           <Spacer size="small" />
 
-          <InputCode value="123456" />
+          <InputCode value={prefilledCodeValue} onChangeText={setPrefilledCodeValue} />
         </View>
 
         <Spacer size="large" />
