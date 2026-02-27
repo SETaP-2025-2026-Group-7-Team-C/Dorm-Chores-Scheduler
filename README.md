@@ -16,6 +16,12 @@ Features (To be completed)
 
 Preview Images (To be completed)
 
+## Documentation
+
+Link (Automatically published): [ReadTheDocs Page](https://dorm-chores-scheduler.readthedocs.io/en/latest/)
+
+Documentation Files: dcs-docs/docs ([Folder Link](https://github.com/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler/tree/main/dcs-docs/docs))
+
 ## Installation & Project Setup
 
 1. Clone the repository
@@ -42,7 +48,7 @@ Preview Images (To be completed)
 
 In the output, you'll find options to open the app in a
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go)
