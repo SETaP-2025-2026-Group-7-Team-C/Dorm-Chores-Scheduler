@@ -67,6 +67,10 @@ React Native:
 - [React Native Components](https://reactnative.dev/docs/components-and-apis)
 - [React Native Navigation](https://reactnavigation.org/docs/getting-started)
 
+Icons:
+
+- [FontAwesome5 Icons](https://fontawesome.com/icons?d=gallery&s=solid&m=free)
+
 ## License
 
 [MIT](LICENSE)
