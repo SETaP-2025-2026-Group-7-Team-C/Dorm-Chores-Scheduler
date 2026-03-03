@@ -7,6 +7,7 @@ import InlineButton from '../../components/InlineButton';
 import Input from '../../components/Input';
 import Spacer from '../../components/Spacer';
 import { COLOURS } from '../../constants/colours';
+import { supabase } from '../../lib/supabase';
 
 type AuthAction = 'resetPassword' | 'signIn' | 'signUp';
 
@@ -14,9 +15,45 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleAction = useCallback((action: AuthAction) => {
-    console.log(`${action} action triggered`);
-  }, []);
+  const handleAction = useCallback(
+    async (action: AuthAction) => {
+      console.log('BEFORE signIn:', { action, email, password });
+
+      if (action === 'signUp') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        console.log('AFTER signUp:', { data, error });
+        return;
+      }
+
+      if (action === 'signIn') {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        console.log('AFTER signIn:', { data, error });
+        return;
+      }
+
+      if (action === 'resetPassword') {
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+
+        console.log('AFTER resetPassword:', { data, error });
+        return;
+      }
+
+      console.log(`${action} action triggered`);
+    },
+    [email, password],
+  );
+
+  // const handleAction = useCallback((action: AuthAction) => {
+  //console.log(`${action} action triggered`);
+  //}, []);//
 
   const dismissKeyboard = useCallback(() => {
     Keyboard.dismiss();
