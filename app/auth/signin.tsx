@@ -4,6 +4,7 @@ import { Keyboard, StyleSheet, Text, TouchableWithoutFeedback, View } from 'reac
 import Button from '../../components/Button';
 import CurvedBanner from '../../components/CurvedBanner';
 import InlineButton from '../../components/InlineButton';
+import InlineNotification from '../../components/InlineNotification';
 import Input from '../../components/Input';
 import Spacer from '../../components/Spacer';
 import { COLOURS } from '../../constants/colours';
@@ -14,10 +15,26 @@ type AuthAction = 'resetPassword' | 'signIn' | 'signUp';
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [notice, setNotice] = useState<{
+    type: 'error' | 'success' | 'info' | 'warning' | 'tip';
+    text: string;
+  } | null>(null); //added to store a message that can show on screen//
 
   const handleAction = useCallback(
     async (action: AuthAction) => {
       console.log('BEFORE signIn:', { action, email, password });
+
+      setNotice(null);
+
+      // basic validation
+      if (!email.trim()) {
+        setNotice({ type: 'error', text: 'Please enter your email address.' });
+        return;
+      }
+      if (action !== 'resetPassword' && !password) {
+        setNotice({ type: 'error', text: 'Please enter your password.' });
+        return;
+      }
 
       if (action === 'signUp') {
         const { data, error } = await supabase.auth.signUp({
@@ -36,6 +53,20 @@ export default function SignIn() {
         });
 
         console.log('AFTER signIn:', { data, error });
+
+        if (error) {
+          setNotice({
+            type: 'error',
+            text: error.message,
+          });
+          return;
+        }
+
+        setNotice({
+          type: 'success',
+          text: 'Signed in successfully!',
+        });
+
         return;
       }
 
@@ -102,6 +133,12 @@ export default function SignIn() {
             </Text>
 
             <Spacer size="large" />
+            {notice && (
+              <>
+                <InlineNotification type={notice.type} text={notice.text} />
+                <Spacer size="medium" />
+              </>
+            )}
 
             <Button title="Sign in" onPress={() => handleAction('signIn')} variant="standard" />
 
