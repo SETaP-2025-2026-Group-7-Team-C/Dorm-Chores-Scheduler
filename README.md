@@ -38,6 +38,7 @@ Documentation Files: dcs-docs/docs ([Folder Link](https://github.com/SETaP-2025-
 
    ```bash
    npm install
+   npx expo install expo-notifications
    ```
 
 3. Start the app
