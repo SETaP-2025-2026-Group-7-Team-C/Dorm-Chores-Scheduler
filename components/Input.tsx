@@ -205,6 +205,7 @@ const styles = StyleSheet.create({
   },
   secureInput: {
     fontSize: 32,
+    letterSpacing: -4,
     lineHeight: 48,
   },
   toggleButton: {
