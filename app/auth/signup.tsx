@@ -8,15 +8,10 @@ import Input from '../../components/Input';
 import Spacer from '../../components/Spacer';
 import { COLOURS } from '../../constants/colours';
 
-type AuthAction = 'resetPassword' | 'signIn' | 'signUp';
-
-export default function SignIn() {
+export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  const handleAction = useCallback((action: AuthAction) => {
-    console.log(`${action} action triggered`);
-  }, []);
+  const [defaultValue, setDefaultValue] = useState('');
 
   const dismissKeyboard = useCallback(() => {
     Keyboard.dismiss();
@@ -27,15 +22,22 @@ export default function SignIn() {
       <Stack.Screen options={{ headerShown: false }} />
       <TouchableWithoutFeedback onPress={dismissKeyboard}>
         <View style={styles.container}>
-          <CurvedBanner variant="large" />
-          <Spacer size="large" />
+          <CurvedBanner variant="small" />
+          <Spacer size="small" />
 
           <View style={styles.content}>
-            <Text style={styles.title}>SIGN IN</Text>
-            <Text style={styles.subtitle}>Please sign in below to continue</Text>
+            <Text style={styles.title}>CREATE ACCOUNT</Text>
+            <Text style={styles.subtitle}>Please enter the following information</Text>
           </View>
 
-          <Spacer size="large" />
+          <Spacer size="medium" />
+
+          <View style={styles.content}>
+            <Text style={styles.inputLabel}>Display Name</Text>
+            <Input value={defaultValue} onChangeText={setDefaultValue} placeholder="Example Name" />
+          </View>
+
+          <Spacer size="medium" />
 
           <View style={styles.content}>
             <Text style={styles.inputLabel}>Email Address</Text>
@@ -57,25 +59,27 @@ export default function SignIn() {
               secureTextEntry
             />
 
-            <Spacer size="small" />
+            <Spacer size="medium" />
 
-            <Text style={styles.bodyText}>
-              Forgot your password?{' '}
-              <InlineButton
-                title="Reset password"
-                onPress={() => router.push('/auth/reset-password')}
-              />
-            </Text>
+            <Text style={[styles.inputLabel, styles.inputMargin]}>Confirm password</Text>
+            <Input
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Confirm your password"
+              secureTextEntry
+            />
 
-            <Spacer size="large" />
+            <Spacer size="medium" />
 
-            <Button title="Sign in" onPress={() => handleAction('signIn')} variant="standard" />
-
-            <Spacer size="large" />
+            <Button title="Sign Up" onPress={() => router.push('/auth/confirm-email')} />
+            <Spacer size="medium" />
 
             <Text style={[styles.bodyText, styles.centerText]}>
-              Don&apos;t have an account?{' '}
-              <InlineButton title="Sign Up" onPress={() => router.push('/auth/account-type')} />
+              Incorrect account type?{' '}
+              <InlineButton
+                title="Change account type"
+                onPress={() => router.push('/auth/account-type')}
+              />
             </Text>
           </View>
         </View>
@@ -115,5 +119,8 @@ const styles = StyleSheet.create({
   },
   centerText: {
     textAlign: 'center',
+  },
+  inputMargin: {
+    marginBottom: 8,
   },
 });

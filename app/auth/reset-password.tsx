@@ -8,31 +8,34 @@ import Input from '../../components/Input';
 import Spacer from '../../components/Spacer';
 import { COLOURS } from '../../constants/colours';
 
-type AuthAction = 'resetPassword' | 'signIn' | 'signUp';
-
-export default function SignIn() {
+export default function ResetPassword() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleAction = useCallback((action: AuthAction) => {
-    console.log(`${action} action triggered`);
-  }, []);
 
   const dismissKeyboard = useCallback(() => {
     Keyboard.dismiss();
   }, []);
 
+  const handleReset = useCallback(() => {
+    if (!email.trim()) {
+      console.log('Email is required');
+      return;
+    }
+
+    console.log('Reset password triggered');
+  }, [email]);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+
+      <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
         <View style={styles.container}>
           <CurvedBanner variant="large" />
           <Spacer size="large" />
 
           <View style={styles.content}>
-            <Text style={styles.title}>SIGN IN</Text>
-            <Text style={styles.subtitle}>Please sign in below to continue</Text>
+            <Text style={styles.title}>RESET PASSWORD</Text>
+            <Text style={styles.subtitle}>Please fill out the details below</Text>
           </View>
 
           <Spacer size="large" />
@@ -42,40 +45,25 @@ export default function SignIn() {
             <Input
               value={email}
               onChangeText={setEmail}
-              placeholder="Enter your email address"
+              placeholder="example@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              textContentType="emailAddress"
+              autoComplete="email"
             />
-
-            <Spacer size="medium" />
-
-            <Text style={styles.inputLabel}>Password</Text>
-            <Input
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry
-            />
-
-            <Spacer size="small" />
-
-            <Text style={styles.bodyText}>
-              Forgot your password?{' '}
-              <InlineButton
-                title="Reset password"
-                onPress={() => router.push('/auth/reset-password')}
-              />
-            </Text>
 
             <Spacer size="large" />
 
-            <Button title="Sign in" onPress={() => handleAction('signIn')} variant="standard" />
-
+            <Button
+              title="Reset password"
+              onPress={() => router.push('/auth/change-password')}
+              variant="standard"
+            />
             <Spacer size="large" />
 
             <Text style={[styles.bodyText, styles.centerText]}>
-              Don&apos;t have an account?{' '}
-              <InlineButton title="Sign Up" onPress={() => router.push('/auth/account-type')} />
+              No longer needed?{' '}
+              <InlineButton title="Return to Sign in" onPress={() => router.push('/auth/signin')} />
             </Text>
           </View>
         </View>
