@@ -14,6 +14,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { getRepairRequests } from '../../../lib/repairs';
+import { getActiveDormId } from '../../../lib/dorms';
 
 import { FontAwesome5 } from '@expo/vector-icons';
 import AvailabilityBadge from '../../../components/AvailabilityBadge';

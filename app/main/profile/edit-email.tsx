@@ -21,12 +21,15 @@ import Input from '../../../components/Input';
 import Spacer from '../../../components/Spacer';
 
 import { COLOURS } from '../../../constants/colours';
+import { supabase } from '../../../lib/supabase';
 
 const GRADIENT_THRESHOLD = 24;
 
 export default function EditEmail() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
@@ -41,10 +44,61 @@ export default function EditEmail() {
     };
   }, []);
 
+  useEffect(() => {
+    const loadEmail = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error || !user) {
+        console.log('Error fetching auth user:', error);
+        return;
+      }
+
+      setEmail(user.email ?? '');
+    };
+
+    loadEmail();
+  }, []);
+
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollY = e.nativeEvent.contentOffset.y;
     const headerValue = Math.min(scrollY / GRADIENT_THRESHOLD, 1);
     headerGradientOpacity.setValue(headerValue);
+  };
+
+  const handleRequestChange = async () => {
+    setEmailError(null);
+    setNotice(null);
+
+    if (!email || !email.includes('@')) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.updateUser({ email });
+
+    setLoading(false);
+
+    if (error) {
+      setNotice({ type: 'error', text: error.message });
+      return;
+    }
+
+    setNotice({
+      type: 'success',
+      text: 'Check both your current and new email to confirm the change.',
+    });
+
+    setTimeout(() => {
+      router.replace({
+        pathname: '/main/profile/confirm-new-email',
+        params: { email },
+      });
+    }, 1200);
   };
 
   return (
@@ -96,25 +150,35 @@ export default function EditEmail() {
 
             <InlineNotification
               type="warning"
-              text="Changing your email address will update the email used to sign in and receive account notifications."
+              text="For security, Supabase may require confirmation using both your current and new email address."
             />
 
             <Spacer size="medium" />
 
             <Text style={styles.inputLabel}>New email address</Text>
+
             <Input
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
                 setEmailError(null);
+                setNotice(null);
               }}
               placeholder="example@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
               hasError={!!emailError}
             />
+
             {emailError && (
               <InlineNotification type="error" text={emailError} style={{ marginTop: 4 }} />
+            )}
+
+            {notice && (
+              <>
+                <Spacer size="medium" />
+                <InlineNotification type={notice.type} text={notice.text} />
+              </>
             )}
 
             <Spacer size="large" />
@@ -123,15 +187,10 @@ export default function EditEmail() {
 
         <View style={styles.footer}>
           <Button
-            title="Request change"
-            onPress={() => {
-              if (!email || !email.includes('@')) {
-                setEmailError('Please enter a valid email address.');
-                return;
-              }
-              router.push('/main/profile/confirm-new-email');
-            }}
+            title={loading ? 'Requesting...' : 'Request change'}
+            onPress={handleRequestChange}
             variant="standard"
+            disabled={loading}
           />
 
           <Spacer size="large" />

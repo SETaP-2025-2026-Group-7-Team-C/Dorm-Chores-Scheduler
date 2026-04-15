@@ -9,6 +9,7 @@ export const COLOURS = {
   primaryLight: '#87EA5C',
   primaryMuted: '#9BE36D',
   primarySoft: '#DDF7D2',
+  primaryStrong: '#16A34A',
 
   // Neutral colours
   white: '#ffffff',

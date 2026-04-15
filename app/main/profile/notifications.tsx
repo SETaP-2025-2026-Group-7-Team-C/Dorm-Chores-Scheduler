@@ -1,6 +1,7 @@
+import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
@@ -14,44 +15,92 @@ import {
   View,
 } from 'react-native';
 
+import { getCurrentUser } from '../../../lib/auth';
+import { getNotificationSettings, updateNotificationSettings } from '../../../lib/notifications';
+
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import Spacer from '../../../components/Spacer';
 import ToggleItem from '../../../components/ToggleItem';
 
 import { COLOURS } from '../../../constants/colours';
+import type { PreferenceKey } from '../../../lib/inAppNotifications';
 
 const GRADIENT_THRESHOLD = 24;
+const ALL_NOTIFICATIONS_KEY = 'all_notifications';
 
-const SPECIFIC_NOTIFICATIONS = [
-  { id: 'chore_assigned', label: 'New chore assignment' },
-  { id: 'chore_due', label: 'Chore due soon' },
-  { id: 'chore_overdue', label: 'Chore overdue' },
-  { id: 'chore_completed', label: 'Chore completed' },
-  { id: 'repair_submitted', label: 'New repair request submitted' },
-  { id: 'repair_status', label: 'Repair request status updated' },
-  { id: 'repair_comment', label: 'New comment on repair request' },
-  { id: 'daily_reminder', label: 'Daily chore reminder' },
-  { id: 'weekly_rotation', label: 'Weekly chore schedule generated' },
-  { id: 'announcement', label: 'System announcement' },
-  { id: 'account_activity', label: 'Account activity update' },
-];
-
-type NotificationState = Record<string, boolean>;
-
-const DEFAULT_SPECIFIC_STATE: NotificationState = Object.fromEntries(
-  SPECIFIC_NOTIFICATIONS.map((n) => [n.id, true]),
-);
+type NotificationItem = {
+  id: PreferenceKey;
+  label: string;
+  iconName: keyof typeof FontAwesome5.glyphMap;
+};
 
 export default function Notifications() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [allEnabled, setAllEnabled] = useState(true);
-  const [specificState, setSpecificState] = useState<NotificationState>(DEFAULT_SPECIFIC_STATE);
+  const [isManager, setIsManager] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [toggleStates, setToggleStates] = useState<Record<string, boolean>>({});
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const STUDENT_NOTIFICATIONS: NotificationItem[] = [
+    { id: 'new_chore_assignment', label: 'New chore assignment', iconName: 'clipboard-list' },
+    { id: 'chore_due_soon', label: 'Chore due soon', iconName: 'clock' },
+    { id: 'chore_overdue', label: 'Chore overdue', iconName: 'exclamation-circle' },
+    { id: 'chore_completed', label: 'Chore completed', iconName: 'check-circle' },
+    { id: 'repair_status_updated', label: 'Repair request status updated', iconName: 'tools' },
+    { id: 'repair_comment', label: 'New comment on repair request', iconName: 'comment-alt' },
+    { id: 'daily_chore_reminder', label: 'Daily chore reminder', iconName: 'bell' },
+    {
+      id: 'weekly_schedule_generated',
+      label: 'Weekly chore schedule generated',
+      iconName: 'calendar-alt',
+    },
+    { id: 'system_announcement', label: 'System announcement', iconName: 'bullhorn' },
+    { id: 'account_activity_update', label: 'Account activity update', iconName: 'user-circle' },
+  ];
+
+  const MANAGER_NOTIFICATIONS: NotificationItem[] = [
+    { id: 'new_repair_request', label: 'New repair request submitted', iconName: 'tools' },
+    { id: 'repair_status_updated', label: 'Repair request status updated', iconName: 'sync-alt' },
+    { id: 'repair_comment', label: 'New comment on repair request', iconName: 'comment-alt' },
+    { id: 'chore_completed', label: 'Chore completed', iconName: 'check-circle' },
+    { id: 'system_announcement', label: 'System announcement', iconName: 'bullhorn' },
+    { id: 'account_activity_update', label: 'Account activity update', iconName: 'user-circle' },
+  ];
+
+  const notificationsToShow = isManager ? MANAGER_NOTIFICATIONS : STUDENT_NOTIFICATIONS;
+  const allEnabled = toggleStates[ALL_NOTIFICATIONS_KEY] ?? true;
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const user = await getCurrentUser();
+
+        if (!user) {
+          return;
+        }
+
+        setUserId(user.id);
+        setIsManager(user.role === 'manager');
+
+        const preferences = await getNotificationSettings(user.id);
+
+        setToggleStates({
+          [ALL_NOTIFICATIONS_KEY]: preferences[ALL_NOTIFICATIONS_KEY] ?? true,
+          ...preferences,
+        });
+      } catch (error) {
+        console.log('Error loading notification settings:', error);
+      }
+    };
+
+    loadData();
+  }, []);
 
   useEffect(() => {
     const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
     const hideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
     return () => {
       showListener.remove();
       hideListener.remove();
@@ -64,41 +113,58 @@ export default function Notifications() {
     headerGradientOpacity.setValue(headerValue);
   };
 
-  // Master toggle - only controls whether notifications are globally allowed
-  const handleAllEnabledChange = useCallback((value: boolean) => {
-    setAllEnabled(value);
-  }, []);
+  const toggleAllNotifications = async () => {
+    const updated = {
+      ...toggleStates,
+      [ALL_NOTIFICATIONS_KEY]: !allEnabled,
+    };
 
-  // Individual toggle - only affects itself, independent of master
-  const handleSpecificChange = useCallback((id: string, value: boolean) => {
-    setSpecificState((prev) => ({ ...prev, [id]: value }));
-  }, []);
+    setToggleStates(updated);
+
+    if (!userId) return;
+
+    try {
+      await updateNotificationSettings(userId, updated);
+    } catch (err) {
+      console.log('Error saving global notification preference:', err);
+    }
+  };
+
+  const toggleNotification = async (key: PreferenceKey) => {
+    const updated = {
+      ...toggleStates,
+      [key]: !(toggleStates[key] ?? true),
+    };
+
+    setToggleStates(updated);
+
+    if (!userId) return;
+
+    try {
+      await updateNotificationSettings(userId, updated);
+    } catch (err) {
+      console.log('Error saving notification preferences:', err);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Static header */}
       <View style={styles.topBar}>
         <HeaderBackButton iconName="chevron-left" />
       </View>
 
-      {/* Header bottom shadow - fades in once user scrolls */}
       <Animated.View
         style={[styles.headerGradientWrapper, { opacity: headerGradientOpacity }]}
         pointerEvents="none"
       >
         <LinearGradient
-          colors={['rgba(134, 134, 133, 0.35)', 'rgba(102, 102, 102, 0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          colors={['rgba(134,133,133,0.35)', 'rgba(102,102,102,0)']}
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
 
-      {/* Scrollable content */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -114,39 +180,36 @@ export default function Notifications() {
         >
           <View style={styles.content}>
             <Text style={styles.heading}>Notifications</Text>
-            <Text style={styles.body}>Manage your notification preferences here</Text>
 
             <Spacer size="small" />
 
-            {/* Master toggle */}
-            <ToggleItem
-              title="Allow notifications"
-              iconName="bell"
-              value={allEnabled}
-              onValueChange={handleAllEnabledChange}
-            />
+            <Text style={styles.body}>Manage how and when you receive notifications.</Text>
 
             <Spacer size="large" />
 
-            <Text style={styles.sectionTitle}>Specific notifications</Text>
-            <Text style={styles.body}>
-              Choose which types of notifications you&apos;d like to receive from the app
-            </Text>
-
-            <Spacer size="small" />
-
-            {/* Specific notification toggles */}
-            {SPECIFIC_NOTIFICATIONS.map((item) => (
-              <ToggleItem
-                key={item.id}
-                title={item.label}
-                value={specificState[item.id]}
-                onValueChange={(value) => handleSpecificChange(item.id, value)}
-                disabled={!allEnabled}
-              />
-            ))}
+            <ToggleItem
+              title="Allow all notifications"
+              iconName="bell"
+              value={allEnabled}
+              onValueChange={toggleAllNotifications}
+            />
 
             <Spacer size="medium" />
+
+            {notificationsToShow.map((item, index) => (
+              <View key={item.id}>
+                <ToggleItem
+                  title={item.label}
+                  iconName={item.iconName}
+                  value={toggleStates[item.id] ?? true}
+                  onValueChange={() => toggleNotification(item.id)}
+                  disabled={!allEnabled}
+                />
+                {index < notificationsToShow.length - 1 ? <Spacer size="small" /> : null}
+              </View>
+            ))}
+
+            <Spacer size="large" />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -163,16 +226,10 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: COLOURS.white,
-    zIndex: 10,
   },
   headerGradientWrapper: {
     height: 6,
-    width: '100%',
-    zIndex: 9,
   },
   keyboardView: {
     flex: 1,
@@ -190,11 +247,6 @@ const styles = StyleSheet.create({
   heading: {
     fontFamily: 'Inter-Bold',
     fontSize: 28,
-    color: COLOURS.black,
-  },
-  sectionTitle: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 22,
     color: COLOURS.black,
   },
   body: {

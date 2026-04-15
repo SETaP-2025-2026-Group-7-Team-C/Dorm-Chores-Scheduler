@@ -1,9 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Keyboard,
   KeyboardAvoidingView,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -22,42 +21,62 @@ import Spacer from '../../../components/Spacer';
 
 import { COLOURS } from '../../../constants/colours';
 import { getCurrentUser, updateDisplayName } from '../../../lib/auth';
-import { ValidationError, formatErrorMessage } from '../../../lib/errors';
 
 const GRADIENT_THRESHOLD = 24;
 
 export default function EditDisplayName() {
   const [displayName, setDisplayName] = useState('');
-  const [userId, setUserId] = useState<string | null>(null);
-  const [, setKeyboardVisible] = useState(false);
-  const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
 
-  // Fetch current user so we can prep data / extract ID
   useEffect(() => {
-    async function loadData() {
+    const loadDisplayName = async () => {
       try {
         const user = await getCurrentUser();
-        if (user) {
-          setUserId(user.id);
+
+        if (!user) {
+          return;
         }
-      } catch (err) {
-        console.error(err);
+
+        setDisplayName(user.displayName ?? '');
+      } catch (error) {
+        console.error('Failed to load display name:', error);
       }
-    }
-    loadData();
+    };
+
+    loadDisplayName();
   }, []);
 
-  useEffect(() => {
-    const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
-    return () => {
-      showListener.remove();
-      hideListener.remove();
-    };
-  }, []);
+  const handleSaveDisplayName = async () => {
+    setNotice(null);
+    setLoading(true);
+
+    try {
+      const user = await getCurrentUser();
+
+      if (!user) {
+        setNotice({ type: 'error', text: 'Could not find the current user.' });
+        return;
+      }
+
+      await updateDisplayName(user.id, displayName);
+
+      setNotice({ type: 'success', text: 'Display name updated successfully.' });
+
+      setTimeout(() => {
+        router.back();
+      }, 1200);
+    } catch (error: any) {
+      setNotice({
+        type: 'error',
+        text: error?.message || 'Something went wrong while updating your display name.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollY = e.nativeEvent.contentOffset.y;
@@ -65,35 +84,9 @@ export default function EditDisplayName() {
     headerGradientOpacity.setValue(headerValue);
   };
 
-  const handleSave = async () => {
-    setNotice(null);
-
-    if (!userId) {
-      setNotice({ type: 'error', text: 'You must be logged in to do this.' });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await updateDisplayName(userId, displayName);
-      setNotice({ type: 'success', text: 'Display name updated successfully!' });
-    } catch (err: any) {
-      if (err instanceof ValidationError) {
-        setNotice({ type: 'error', text: err.message });
-      } else {
-        setNotice({
-          type: 'error',
-          text: err.message ? formatErrorMessage(err.message) : 'An unexpected error occurred.',
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
 
       <View style={styles.topBar}>
         <HeaderBackButton iconName="chevron-left" />
@@ -111,10 +104,13 @@ export default function EditDisplayName() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
       >
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
@@ -147,16 +143,17 @@ export default function EditDisplayName() {
                 <InlineNotification type={notice.type} text={notice.text} />
               </>
             )}
+
+            <Spacer size="large" />
           </View>
         </ScrollView>
 
         <View style={styles.footer}>
           <Button
             title={loading ? 'Saving...' : 'Save changes'}
-            onPress={handleSave}
+            onPress={handleSaveDisplayName}
             disabled={loading}
           />
-
           <Spacer size="large" />
         </View>
       </KeyboardAvoidingView>
@@ -165,16 +162,32 @@ export default function EditDisplayName() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLOURS.white },
+  container: {
+    flex: 1,
+    backgroundColor: COLOURS.white,
+  },
   topBar: {
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 12,
     backgroundColor: COLOURS.white,
   },
-  headerGradientWrapper: { height: 6 },
-  scrollContent: { flexGrow: 1, paddingBottom: 100 },
-  content: { marginHorizontal: 20 },
+  headerGradientWrapper: {
+    height: 6,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  content: {
+    marginHorizontal: 20,
+  },
   heading: {
     fontFamily: 'Inter-Bold',
     fontSize: 28,
@@ -184,11 +197,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 16,
     color: COLOURS.gray[700],
+    lineHeight: 24,
   },
   label: {
     fontFamily: 'Inter-Bold',
     fontSize: 14,
     marginBottom: 8,
+    color: COLOURS.black,
   },
   footer: {
     padding: 20,

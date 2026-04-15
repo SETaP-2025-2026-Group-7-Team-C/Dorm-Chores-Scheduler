@@ -1,5 +1,6 @@
 import { getDormMembers } from './dorms';
 import { formatErrorMessage } from './errors';
+import { createInAppNotification } from './inAppNotifications';
 import { supabase } from './supabase';
 
 const MAX_CHORES_PER_USER = 100;
@@ -344,6 +345,16 @@ export async function markChoreComplete(choreId: string): Promise<Chore> {
   if (chore.status === 'completed') throw new Error('Chore is already completed');
 
   const completedChore = await updateChore(choreId, { status: 'completed' });
+
+  if (chore.meta?.assignedTo) {
+    await createInAppNotification(
+      chore.meta.assignedTo,
+      'chore_completed',
+      'Chore completed',
+      `"${chore.title}" was marked as completed.`,
+      'chore',
+    );
+  }
 
   if (chore.meta?.isRecurring) {
     const { assignedTo, rotation, rotIdx, ...baseMeta } = chore.meta;

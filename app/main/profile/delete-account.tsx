@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
@@ -19,6 +19,7 @@ import InlineNotification from '../../../components/InlineNotification';
 import Spacer from '../../../components/Spacer';
 
 import { COLOURS } from '../../../constants/colours';
+import { getCurrentUser, signOutUser, softDeleteCurrentUser } from '../../../lib/auth';
 
 const GRADIENT_THRESHOLD = 24;
 
@@ -38,30 +39,44 @@ export default function DeleteAccount() {
     setLoading(true);
     setNotice(null);
 
-    // Run delete request here.
+    try {
+      const user = await getCurrentUser();
 
-    // if (error) {
-    //   setLoading(false);
-    //   setNotice({ type: 'error', text: error.message });
-    //   return;
-    // }
+      if (!user) {
+        setNotice({ type: 'error', text: 'Could not find the current user.' });
+        return;
+      }
 
-    setLoading(false);
+      await softDeleteCurrentUser(user.id);
+      await signOutUser();
+
+      setNotice({
+        type: 'success',
+        text: 'Your account has been deactivated successfully.',
+      });
+
+      setTimeout(() => {
+        router.replace('/auth/signin');
+      }, 1200);
+    } catch (error: any) {
+      setNotice({
+        type: 'error',
+        text: error?.message || 'Something went wrong while processing your request.',
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const handleDelete = useCallback(() => {
-    Alert.alert(
-      'Delete account',
-      'This will permanently remove your account. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: confirmDelete,
-        },
-      ],
-    );
+    Alert.alert('Delete account', 'This will deactivate your account and sign you out.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: confirmDelete,
+      },
+    ]);
   }, [confirmDelete]);
 
   return (
@@ -70,12 +85,10 @@ export default function DeleteAccount() {
         options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }}
       />
 
-      {/* Static header */}
       <View style={styles.topBar}>
         <HeaderBackButton iconName="chevron-left" />
       </View>
 
-      {/* Header bottom shadow — fades in once user scrolls */}
       <Animated.View
         style={[styles.headerGradientWrapper, { opacity: headerGradientOpacity }]}
         pointerEvents="none"
@@ -88,7 +101,6 @@ export default function DeleteAccount() {
         />
       </Animated.View>
 
-      {/* Scrollable content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -102,9 +114,7 @@ export default function DeleteAccount() {
           <Spacer size="small" />
 
           <Text style={styles.body}>
-            Deleting your account will permanently remove your profile, settings, and all associated
-            data. Once deleted, you will no longer be able to sign in, and this action cannot be
-            undone.
+            Deleting your account will deactivate your profile and sign you out of the app.
           </Text>
 
           {notice && (
@@ -118,10 +128,9 @@ export default function DeleteAccount() {
         </View>
       </ScrollView>
 
-      {/* Pinned delete button at the bottom */}
       <View style={styles.footer}>
         <Button
-          title={loading ? 'Deleting...' : 'Delete account'}
+          title={loading ? 'Processing...' : 'Delete account'}
           onPress={handleDelete}
           variant="danger"
           disabled={loading}

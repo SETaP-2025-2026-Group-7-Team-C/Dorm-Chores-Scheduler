@@ -1,235 +1,126 @@
 -- =========================
 -- ENUM TYPES
 -- =========================
-
-create type chore_frequency as enum ('daily', 'weekly', 'monthly');
-
-create type assignment_status as enum ('pending', 'in_progress', 'completed', 'overdue');
-
-create type repair_status_type as enum ('pending', 'in_progress', 'completed', 'rejected');
-
-create type repair_urgency as enum ('low', 'medium', 'high');
------------------------------------------
-
--- =========================
+do $ $ begin if not exists (
+    select
+        1
+    from
+        pg_type
+    where
+        typname = 'availability_status_type'
+) then create type availability_status_type as enum ('available', 'unavailable');end if;end $ $;do $ $ begin if not exists (
+    select
+        1
+    from
+        pg_type
+    where
+        typname = 'repair_status_type'
+) then create type repair_status_type as enum (
+    'pending',
+    'in_progress',
+    'completed',
+    'rejected'
+);end if;end $ $;do $ $ begin if not exists (
+    select
+        1
+    from
+        pg_type
+    where
+        typname = 'repair_urgency'
+) then create type repair_urgency as enum ('low', 'medium', 'high');end if;end $ $;-- =========================
 -- PROFILES TABLE
 -- =========================
-create table public.profiles (
-    user_id uuid not null,
-    display_name varchar check (char_length(display_name) > 0),
+create table if not exists public.profiles (
+    id uuid primary key references auth.users(id) on delete cascade,
+    display_name text check (char_length(display_name) > 0),
     is_manager boolean not null default false,
+    avatar_url text,
     created_at timestamptz not null default now(),
-
-    constraint profiles_pkey primary key (user_id),
-
-    constraint profiles_user_id_fkey
-        foreign key (user_id)
-        references auth.users (id)
-        on delete cascade
-);
-
-
-
-
-
--- =========================
--- HOUSEHOLDS TABLE
--- =========================
-
-create table public.households (
-    household_id uuid not null default gen_random_uuid(),
-    household_name text not null,
-    join_code text not null,
-    created_by uuid not null default auth.uid(),
-    created_at timestamptz not null default now(),
-
-    constraint households_pkey
-        primary key (household_id),
-
-    constraint households_join_code_key
-        unique (join_code),
-
-    constraint households_created_by_fkey
-        foreign key (created_by)
-        references public.profiles (user_id)
-        on delete restrict
+    availability_status availability_status_type not null default 'available',
+    is_deleted boolean not null default false,
+    deleted_at timestamptz
 );
 
 -- =========================
--- HOUSEHOLD_MEMBERS TABLE
+-- DORMS TABLE
 -- =========================
-
-create table public.household_members (
-  user_id uuid not null,
-  household_id uuid not null,
-  joined_at timestamptz not null default now(),
-
-  constraint household_members_pkey
-    primary key (user_id, household_id),
-
-  constraint unique_user_one_household
-    unique (user_id),
-
-  constraint household_members_user_id_fkey
-    foreign key (user_id)
-    references public.profiles (user_id)
-    on delete cascade,
-
-  constraint household_members_household_id_fkey
-    foreign key (household_id)
-    references public.households (household_id)
-    on delete cascade
-);
-
+create table if not exists public.dorms (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    join_code text not null unique,
+    created_by uuid not null references public.profiles(id) on delete restrict,
+    created_at timestamptz not null default now()
+);-- =========================
+-- DORM_MEMBERS TABLE
 -- =========================
+create table if not exists public.dorm_members (
+    user_id uuid not null references public.profiles(id) on delete cascade,
+    dorm_id uuid not null references public.dorms(id) on delete cascade,
+    joined_at timestamptz not null default now(),
+    constraint dorm_members_pkey primary key (user_id, dorm_id),
+    constraint unique_user_one_dorm unique (user_id)
+);-- =========================
 -- CHORES TABLE
 -- =========================
-
-create table public.chores (
-    chore_id uuid not null default gen_random_uuid(),
-    household_id uuid not null,
+create table if not exists public.chores (
+    id uuid primary key default gen_random_uuid(),
+    dorm_id uuid not null references public.dorms(id) on delete cascade,
     title text not null,
-    description text null,
-    frequency public.chore_frequency not null,
-    created_by uuid not null default auth.uid(),
+    description text,
+    status text not null default 'pending',
     created_at timestamptz not null default now(),
-
-    constraint chores_pkey
-        primary key (chore_id),
-
-    constraint unique_chore_title_per_household
-        unique (household_id, title),
-
-    constraint chores_household_id_fkey
-        foreign key (household_id)
-        references public.households (household_id)
-        on delete cascade,
-
-    constraint chores_created_by_fkey
-        foreign key (created_by)
-        references public.profiles (user_id)
-        on delete restrict
-);
-
+    due_in_days integer
+);-- =========================
+-- InApp notification TABLE
 -- =========================
--- CHORE_ASSIGNMENTS TABLE
--- =========================
-
-create table public.chore_assignments (
-    assignment_id uuid not null default gen_random_uuid(),
-    chore_id uuid not null,
-    assigned_to uuid not null,
-    assigned_by uuid not null,
-    week_start_date date not null,
-    status public.assignment_status not null default 'pending'::assignment_status,
-    completed_at timestamptz null,
-    created_at timestamptz not null default now(),
-
-    constraint chore_assignments_pkey
-        primary key (assignment_id),
-
-    constraint unique_chore_week
-        unique (chore_id, week_start_date),
-
-    constraint chore_assignments_chore_id_fkey
-        foreign key (chore_id)
-        references public.chores (chore_id)
-        on delete cascade,
-
-    constraint chore_assignments_assigned_to_fkey
-        foreign key (assigned_to)
-        references public.profiles (user_id)
-        on delete restrict,
-
-    constraint chore_assignments_assigned_by_fkey
-        foreign key (assigned_by)
-        references public.profiles (user_id)
-        on delete restrict
-);
-
--- =========================
+create table if not exists public.in_app_notifications (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references auth.users(id) on delete cascade,
+    title text not null,
+    message text not null,
+    type text not null,
+    is_read boolean not null default false,
+    created_at timestamptz not null default now()
+);-- =========================
 -- REPAIR_REQUESTS TABLE
 -- =========================
-
-create table public.repair_requests (
-    repair_id uuid not null default gen_random_uuid(),
-    household_id uuid not null,
-    submitted_by uuid not null default auth.uid(),
+create table if not exists public.repair_requests (
+    id uuid primary key default gen_random_uuid(),
+    dorm_id uuid not null references public.dorms(id) on delete cascade,
+    submitted_by uuid not null references public.profiles(id) on delete restrict,
     title text not null,
     description text not null,
     location text not null,
-    urgency public.repair_urgency not null default 'low'::repair_urgency,
-    status public.repair_status_type not null default 'pending'::repair_status_type,
-    resolution_notes text null,
-    resolved_by uuid null,
-    resolved_at timestamptz null,
-    created_at timestamptz not null default now(),
-
-    constraint repair_requests_pkey
-        primary key (repair_id),
-
-    constraint repair_requests_household_id_fkey
-        foreign key (household_id)
-        references public.households (household_id)
-        on delete cascade,
-
-    constraint repair_requests_submitted_by_fkey
-        foreign key (submitted_by)
-        references public.profiles (user_id)
-        on delete restrict,
-
-    constraint repair_requests_resolved_by_fkey
-        foreign key (resolved_by)
-        references public.profiles (user_id)
-        on delete set null
-);
-
--- =========================
+    urgency repair_urgency not null default 'low',
+    status repair_status_type not null default 'pending',
+    resolution_notes text,
+    resolved_by uuid references public.profiles(id) on delete
+    set
+        null,
+        resolved_at timestamptz,
+        created_at timestamptz not null default now()
+);-- =========================
 -- REPAIR_IMAGES TABLE
 -- =========================
-
-create table public.repair_images (
-    image_id uuid not null default gen_random_uuid(),
-    repair_id uuid not null,
+create table if not exists public.repair_images (
+    id uuid primary key default gen_random_uuid(),
+    repair_id uuid not null references public.repair_requests(id) on delete cascade,
     image_url text not null,
-    uploaded_by uuid not null default auth.uid(),
-    created_at timestamptz not null default now(),
-
-    constraint repair_images_pkey
-        primary key (image_id),
-
-    constraint repair_images_repair_id_fkey
-        foreign key (repair_id)
-        references public.repair_requests (repair_id)
-        on delete cascade,
-
-    constraint repair_images_uploaded_by_fkey
-        foreign key (uploaded_by)
-        references public.profiles (user_id)
-        on delete restrict
-);
-
+    uploaded_by uuid not null references public.profiles(id) on delete restrict,
+    created_at timestamptz not null default now()
+);-- =========================
+-- REPAIR_STATUS HISTORY TABLE
 -- =========================
--- REPAIR_STATUS (HISTORY TABLE)
+create table if not exists public.repair_status (
+    id uuid primary key default gen_random_uuid(),
+    repair_id uuid not null references public.repair_requests(id) on delete cascade,
+    status repair_status_type not null default 'pending',
+    changed_by uuid not null references public.profiles(id) on delete restrict,
+    changed_at timestamptz not null default now()
+);-- =========================
+-- NOTIFICATION PREFERENCES
 -- =========================
-
-create table public.repair_status (
-    status_id uuid not null default gen_random_uuid(),
-    repair_id uuid not null,
-    status public.repair_status_type not null default 'pending'::public.repair_status_type,
-    changed_by uuid not null,
-    changed_at timestamptz not null default now(),
-
-    constraint repair_status_pkey
-        primary key (status_id),
-
-    constraint repair_status_repair_id_fkey
-        foreign key (repair_id)
-        references public.repair_requests (repair_id)
-        on delete cascade,
-
-    constraint repair_status_changed_by_fkey
-        foreign key (changed_by)
-        references public.profiles (user_id)
-        on delete restrict
+create table if not exists public.notification_preferences (
+    user_id uuid primary key references auth.users(id) on delete cascade,
+    preferences jsonb default '{}'
 );

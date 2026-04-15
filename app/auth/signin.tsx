@@ -18,7 +18,7 @@ import Input from '../../components/Input';
 import Spacer from '../../components/Spacer';
 
 import { COLOURS } from '../../constants/colours';
-import { getUserRole, signInUser } from '../../lib/auth';
+import { getUserRole, isSoftDeletedUser, signInUser, signOutUser } from '../../lib/auth';
 import { UnauthorisedError, ValidationError, formatErrorMessage } from '../../lib/errors';
 
 export default function SignIn() {
@@ -42,7 +42,6 @@ export default function SignIn() {
     return () => backHandler.remove();
   }, []);
 
-  // Track keyboard visibility for KeyboardAvoidingView offset
   useEffect(() => {
     const showListener = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
@@ -56,7 +55,6 @@ export default function SignIn() {
     };
   }, []);
 
-  // Determine which field an error belongs to based on the error message
   const setFieldError = (error: string) => {
     if (error.startsWith('Email')) {
       setEmailError(error);
@@ -67,7 +65,6 @@ export default function SignIn() {
     }
   };
 
-  // Clear all errors
   const clearErrors = () => {
     setEmailError(null);
     setPasswordError(null);
@@ -83,6 +80,16 @@ export default function SignIn() {
       const userId = data.user?.id;
       if (!userId) {
         setNotice({ type: 'error', text: 'Unable to find signed in user.' });
+        return;
+      }
+
+      const isDeleted = await isSoftDeletedUser(userId);
+      if (isDeleted) {
+        await signOutUser();
+        setNotice({
+          type: 'error',
+          text: 'This account has been deactivated and can no longer be used.',
+        });
         return;
       }
 

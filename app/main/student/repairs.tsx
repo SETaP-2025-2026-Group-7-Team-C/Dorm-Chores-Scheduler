@@ -15,6 +15,8 @@ import {
   Text,
   View,
 } from 'react-native';
+import { getRepairRequestsByReporter } from '../../../lib/repairs';
+import { supabase } from '../../../lib/supabase';
 
 import { FontAwesome5 } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';

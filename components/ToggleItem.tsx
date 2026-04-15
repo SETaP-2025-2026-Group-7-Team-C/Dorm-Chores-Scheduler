@@ -94,7 +94,7 @@ export default function ToggleItem({
 
   const backgroundColor = backgroundAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLOURS.gray[300], COLOURS.primary],
+    outputRange: [COLOURS.gray[300], COLOURS.primaryStrong],
   });
 
   const hasIcon = !!iconName;

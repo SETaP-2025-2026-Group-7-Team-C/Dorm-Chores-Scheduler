@@ -20,7 +20,6 @@ import Spacer from '../../../components/Spacer';
 
 import { COLOURS } from '../../../constants/colours';
 import { getCurrentUser } from '../../../lib/auth';
-import { supabase } from '../../../lib/supabase';
 
 const GRADIENT_THRESHOLD = 24;
 
@@ -31,31 +30,6 @@ export default function PersonalDetails() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
 
-  // Retrieve existing user credentials
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const user = await getCurrentUser();
-        if (user) {
-          setEmail(user.email || '');
-
-          const { data } = await supabase
-            .from('profiles')
-            .select('display_name')
-            .eq('id', user.id)
-            .single();
-
-          if (data) {
-            setDisplayName(data.display_name || 'Anonymous');
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    loadData();
-  }, []);
-
   useEffect(() => {
     const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
     const hideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
@@ -63,6 +37,25 @@ export default function PersonalDetails() {
       showListener.remove();
       hideListener.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    const loadPersonalDetails = async () => {
+      try {
+        const user = await getCurrentUser();
+
+        if (!user) {
+          return;
+        }
+
+        setEmail(user.email ?? '');
+        setDisplayName(user.displayName ?? '');
+      } catch (error) {
+        console.error('Failed to load personal details:', error);
+      }
+    };
+
+    loadPersonalDetails();
   }, []);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -79,12 +72,10 @@ export default function PersonalDetails() {
         options={{ headerShown: false, gestureEnabled: true, animation: 'slide_from_right' }}
       />
 
-      {/* Static header */}
       <View style={styles.topBar}>
         <HeaderBackButton iconName="chevron-left" />
       </View>
 
-      {/* Header bottom shadow - fades in once user scrolls */}
       <Animated.View
         style={[styles.headerGradientWrapper, { opacity: headerGradientOpacity }]}
         pointerEvents="none"
@@ -97,7 +88,6 @@ export default function PersonalDetails() {
         />
       </Animated.View>
 
-      {/* Scrollable content */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}

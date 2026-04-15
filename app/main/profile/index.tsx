@@ -21,43 +21,16 @@ import ProfilePicture from '../../../components/ProfilePicture';
 import Spacer from '../../../components/Spacer';
 
 import { COLOURS } from '../../../constants/colours';
-
 import { getCurrentUser, signOutUser } from '../../../lib/auth';
-import { supabase } from '../../../lib/supabase';
 
 const GRADIENT_THRESHOLD = 24;
 
 export default function Profile() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [accountType, setAccountType] = useState('Loading...');
+  const [accountType, setAccountType] = useState('');
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
-
-  // Fetch the current user details and profile
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const user = await getCurrentUser();
-        if (!user) return;
-
-        setAccountType(user.role === 'manager' ? 'Manager Account' : 'Student Account');
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('id', user.id)
-          .single();
-
-        if (data && !error) {
-          setDisplayName(data.display_name || 'Anonymous');
-        }
-      } catch (err) {
-        console.error('Failed to load profile:', err);
-      }
-    }
-    loadProfile();
-  }, []);
 
   useEffect(() => {
     const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
@@ -67,6 +40,25 @@ export default function Profile() {
       showListener.remove();
       hideListener.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const user = await getCurrentUser();
+
+        if (!user) {
+          return;
+        }
+
+        setDisplayName(user.displayName ?? 'User');
+        setAccountType(user.role === 'manager' ? 'Manager Account' : 'Student Account');
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    loadProfile();
   }, []);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -118,8 +110,8 @@ export default function Profile() {
             <View style={styles.profileSection}>
               <ProfilePicture variant="large" />
               <Spacer size="medium" />
-              <Text style={styles.heading}>{displayName || 'LOADING...'}</Text>
-              <Text style={styles.accountType}>{accountType}</Text>
+              <Text style={styles.heading}>{displayName || 'Loading...'}</Text>
+              <Text style={styles.accountType}>{accountType || 'Loading...'}</Text>
             </View>
 
             <Spacer size="large" />
