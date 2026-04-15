@@ -23,7 +23,7 @@ import Spacer from '../../../components/Spacer';
 import ToggleItem from '../../../components/ToggleItem';
 
 import { COLOURS } from '../../../constants/colours';
-import type { PreferenceKey } from '../../../lib/inAppNotifications';
+import type { PreferenceKey } from '../../../lib/notifications';
 
 const GRADIENT_THRESHOLD = 24;
 const ALL_NOTIFICATIONS_KEY = 'all_notifications';

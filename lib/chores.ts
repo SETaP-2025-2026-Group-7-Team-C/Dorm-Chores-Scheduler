@@ -1,6 +1,6 @@
 import { getDormMembers } from './dorms';
 import { formatErrorMessage } from './errors';
-import { createInAppNotification } from './inAppNotifications';
+import { createInAppNotification } from './notifications';
 import { supabase } from './supabase';
 
 const MAX_CHORES_PER_USER = 100;
