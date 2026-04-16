@@ -356,7 +356,19 @@ export default function EditDorm() {
               </>
             )}
 
+            <Spacer size="large" />
+
+            {/* AUDIT LOG LINK ADDED HERE */}
+            <Text style={styles.inputLabel}>Audit Log</Text>
+            <Text style={styles.subheading}>View recent history and actions in this dorm.</Text>
             <Spacer size="medium" />
+            <Button
+              title="View Dorm Audits"
+              onPress={() => router.push('/main/student/audit-logs')}
+              variant="standard"
+            />
+
+            <Spacer size="large" />
 
             <View style={styles.divider} />
 

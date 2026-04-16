@@ -532,6 +532,12 @@ export default function Home() {
                 iconName="chart-bar"
                 onPress={() => router.push('/main/student/chore-analytics')}
               />
+              {/* AUDIT LOGS BUTTON ADDED HERE */}
+              <BlockButton
+                title="Audit Logs"
+                iconName="history"
+                onPress={() => router.push('/main/student/audit-logs')}
+              />
             </View>
 
             <Spacer size="large" />
