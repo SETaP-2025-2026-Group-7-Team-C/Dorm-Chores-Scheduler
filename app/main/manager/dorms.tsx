@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Keyboard,
@@ -23,6 +24,9 @@ import NavBar, { NavBarItem } from '../../../components/Navbar';
 import ProfilePicture from '../../../components/ProfilePicture';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getCurrentUser } from '../../../lib/auth';
+import { getDormsByManager } from '../../../lib/dorms';
+import { supabase } from '../../../lib/supabase';
 
 const NAV_ITEMS: NavBarItem[] = [
   {
@@ -54,43 +58,12 @@ type ManagedDorm = {
   stats: { value: number; label: string }[];
 };
 
-// TODO: Replace with data fetched from API
-const MANAGED_DORMS: ManagedDorm[] = [
-  {
-    id: '1',
-    title: 'Maple House',
-    subtitle: 'Joined 01/01/2026',
-    stats: [
-      { value: 3, label: 'Open repairs' },
-      { value: 12, label: 'Closed repairs' },
-    ],
-  },
-  {
-    id: '2',
-    title: 'Oak Lodge',
-    subtitle: 'Joined 15/02/2026',
-    stats: [
-      { value: 1, label: 'Open repairs' },
-      { value: 7, label: 'Closed repairs' },
-    ],
-  },
-  {
-    id: '3',
-    title: 'Elm Court',
-    subtitle: 'Joined 20/03/2026',
-    stats: [
-      { value: 0, label: 'Open repairs' },
-      { value: 2, label: 'Closed repairs' },
-    ],
-  },
-];
-
-// const MANAGED_DORMS: ManagedDorm[] = [];
-
 export default function ManagerDorms() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [confirmingLeaveId, setConfirmingLeaveId] = useState<string | null>(null);
+  const [managedDorms, setManagedDorms] = useState<ManagedDorm[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [contentOverflows, setContentOverflows] = useState(false);
   const scrollViewHeight = useRef(0);
@@ -98,6 +71,66 @@ export default function ManagerDorms() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const loadManagedDorms = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        setManagedDorms([]);
+        return;
+      }
+
+      const dorms = await getDormsByManager(user.id);
+
+      const mapped = await Promise.all(
+        dorms.map(async (dorm) => {
+          const [openRepairs, closedRepairs] = await Promise.all([
+            supabase
+              .from('repair_requests')
+              .select('id', { count: 'exact', head: true })
+              .eq('dorm_id', dorm.id)
+              .in('status', ['pending', 'in_progress']),
+            supabase
+              .from('repair_requests')
+              .select('id', { count: 'exact', head: true })
+              .eq('dorm_id', dorm.id)
+              .in('status', ['completed', 'rejected']),
+          ]);
+
+          const created = new Date(dorm.created_at);
+          const dateStr = `${created.getDate().toString().padStart(2, '0')}/${(
+            created.getMonth() + 1
+          )
+            .toString()
+            .padStart(2, '0')}/${created.getFullYear()}`;
+
+          return {
+            id: dorm.id,
+            title: dorm.name,
+            subtitle: `Linked ${dateStr}`,
+            stats: [
+              { value: openRepairs.count || 0, label: 'Open repairs' },
+              { value: closedRepairs.count || 0, label: 'Closed repairs' },
+            ],
+          };
+        }),
+      );
+
+      setManagedDorms(mapped);
+    } catch (error) {
+      console.warn('Failed to load managed dorms', error);
+      setManagedDorms([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadManagedDorms();
+    }, [loadManagedDorms]),
+  );
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -143,7 +176,7 @@ export default function ManagerDorms() {
   };
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({ ...item }));
-  const isEmpty = MANAGED_DORMS.length === 0;
+  const isEmpty = managedDorms.length === 0;
 
   return (
     <View style={styles.container}>
@@ -190,7 +223,13 @@ export default function ManagerDorms() {
           <View style={styles.content}>
             <Text style={styles.title}>Dorms</Text>
 
-            {isEmpty ? (
+            {isLoading ? (
+              <View
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}
+              >
+                <ActivityIndicator size="large" color={COLOURS.black} />
+              </View>
+            ) : isEmpty ? (
               <>
                 <Spacer size="large" />
                 <View style={styles.noneFound}>
@@ -205,7 +244,7 @@ export default function ManagerDorms() {
               </>
             ) : (
               <View style={styles.table}>
-                {MANAGED_DORMS.map((dorm) => {
+                {managedDorms.map((dorm) => {
                   const isConfirming = confirmingLeaveId === dorm.id;
                   return (
                     <View key={dorm.id} style={styles.tableRow}>
@@ -244,15 +283,13 @@ export default function ManagerDorms() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {!isEmpty && (
-        <View style={styles.pillButtonWrapper}>
-          <ActionPillButton
-            title="Add Dorm"
-            iconName="plus"
-            onPress={() => router.push('/main/manager/add-dorm')}
-          />
-        </View>
-      )}
+      <View style={styles.pillButtonWrapper}>
+        <ActionPillButton
+          title="Add Dorm"
+          iconName="plus"
+          onPress={() => router.push('/main/manager/add-dorm')}
+        />
+      </View>
 
       <View style={styles.navBarBackground} pointerEvents="none" />
 

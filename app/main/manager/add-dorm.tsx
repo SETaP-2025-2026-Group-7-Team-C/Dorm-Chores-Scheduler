@@ -2,17 +2,40 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import Button from '../../../components/Button';
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
+import InlineNotification from '../../../components/InlineNotification';
+import Input from '../../../components/Input';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getCurrentUser } from '../../../lib/auth';
+import {
+  linkDormToManagerByJoinCode,
+  linkDormToManagerByManualCode,
+  linkDormToManagerByQr,
+} from '../../../lib/dorms';
 
 export default function AddDorm() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [manualJoinCode, setManualJoinCode] = useState('');
+  const [isLinkingManual, setIsLinkingManual] = useState(false);
+  const [notice, setNotice] = useState<{
+    type: 'error' | 'success' | 'info' | 'warning' | 'tip';
+    text: string;
+  } | null>(null);
 
   const headerGradientOpacity = useRef(new Animated.Value(1)).current; // Keep solid for this page since it doesn't scroll
 
@@ -24,15 +47,59 @@ export default function AddDorm() {
     return () => backHandler.remove();
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { type: string; data: string }) => {
     setScanned(true);
-    // TODO: Verify the scanned QR code payload, link the dorm via API, then navigate
-    console.log('Scanned data:', data);
+    setNotice(null);
 
-    // Simulate an API delay before routing back to the dorms list
-    setTimeout(() => {
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        throw new Error('You must be signed in to link a dorm');
+      }
+
+      await linkDormToManagerByQr(user.id, data);
+      setNotice({ type: 'success', text: 'Dorm linked successfully' });
       router.push('/main/manager/dorms');
-    }, 1500);
+    } catch (error: any) {
+      setNotice({
+        type: 'error',
+        text: error?.message || 'Failed to link dorm from QR code',
+      });
+      setScanned(false);
+    }
+  };
+
+  const handleManualConnect = async () => {
+    const code = manualJoinCode.trim().toUpperCase();
+    if (!code) {
+      setNotice({ type: 'error', text: 'Please enter a manager connect code or dorm join code' });
+      return;
+    }
+
+    setIsLinkingManual(true);
+    setNotice(null);
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        throw new Error('You must be signed in to link a dorm');
+      }
+
+      if (code.startsWith('DCSM-')) {
+        await linkDormToManagerByManualCode(user.id, code);
+      } else {
+        // Backward-compatible fallback for plain join codes.
+        await linkDormToManagerByJoinCode(user.id, code);
+      }
+      setNotice({ type: 'success', text: 'Dorm linked successfully' });
+      router.push('/main/manager/dorms');
+    } catch (error: any) {
+      setNotice({
+        type: 'error',
+        text: error?.message || 'Failed to link dorm from join code',
+      });
+    } finally {
+      setIsLinkingManual(false);
+    }
   };
 
   return (
@@ -58,61 +125,110 @@ export default function AddDorm() {
         />
       </Animated.View>
 
-      <View style={styles.content}>
-        <Text style={styles.heading}>Connect a Dorm</Text>
-        <Spacer size="small" />
-        <Text style={styles.subheading}>
-          Scan the QR code on the resident&apos;s device to add their dorm to your managed list.
-        </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>
+            <Text style={styles.heading}>Connect a Dorm</Text>
+            <Spacer size="small" />
+            <Text style={styles.subheading}>
+              Scan the resident QR code, or enter the dorm join code manually if scanning fails.
+            </Text>
 
-        <Spacer size="large" />
+            <Spacer size="large" />
 
-        {/* Camera & Permission States */}
-        <View style={styles.cameraWrapper}>
-          {!permission ? (
-            <View style={styles.permissionContainer}>
-              <Text style={[styles.subheading, { textAlign: 'center' }]}>
-                Requesting camera permission...
-              </Text>
+            <View style={styles.cameraWrapper}>
+              {!permission ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={[styles.subheading, { textAlign: 'center' }]}>
+                    Requesting camera permission...
+                  </Text>
+                </View>
+              ) : !permission.granted ? (
+                <View style={styles.permissionContainer}>
+                  <Text style={styles.fieldLabel}>Camera Access Denied</Text>
+                  <Spacer size="small" />
+                  <Text style={[styles.subheading, { textAlign: 'center' }]}>
+                    We need access to your camera to scan dorm QR codes.
+                  </Text>
+                  <Spacer size="medium" />
+                  <Button title="Grant Permission" onPress={requestPermission} />
+                </View>
+              ) : (
+                <View style={styles.scannerContainer}>
+                  <CameraView
+                    style={StyleSheet.absoluteFillObject}
+                    facing="back"
+                    onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ['qr'],
+                    }}
+                  />
+                  <View style={styles.overlay}>
+                    <View style={styles.scanTarget} />
+                  </View>
+                </View>
+              )}
             </View>
-          ) : !permission.granted ? (
-            <View style={styles.permissionContainer}>
-              <Text style={styles.fieldLabel}>Camera Access Denied</Text>
-              <Spacer size="small" />
-              <Text style={[styles.subheading, { textAlign: 'center' }]}>
-                We need access to your camera to scan dorm QR codes.
-              </Text>
-              <Spacer size="medium" />
-              <Button title="Grant Permission" onPress={requestPermission} />
-            </View>
-          ) : (
-            <View style={styles.scannerContainer}>
-              <CameraView
-                style={StyleSheet.absoluteFillObject}
-                facing="back"
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-                barcodeScannerSettings={{
-                  barcodeTypes: ['qr'],
-                }}
-              />
-              {/* Overlay styling for the scanner */}
-              <View style={styles.overlay}>
-                <View style={styles.scanTarget} />
-              </View>
-            </View>
-          )}
-        </View>
 
-        <Spacer size="large" />
+            <Spacer size="medium" />
 
-        {scanned ? (
-          <Text style={styles.successText}>QR Code scanned! Connecting...</Text>
-        ) : (
-          <Text style={styles.centerText}>
-            Changed your mind? <InlineButton title="Go back" onPress={() => router.back()} />
-          </Text>
-        )}
-      </View>
+            {scanned ? (
+              <Text style={styles.successText}>QR Code scanned! Connecting...</Text>
+            ) : (
+              <Text style={styles.centerText}>Scan the student QR above</Text>
+            )}
+
+            <Spacer size="large" />
+
+            <View style={styles.divider} />
+
+            <Spacer size="large" />
+
+            <Text style={styles.fieldLabel}>Manual connect code</Text>
+            <Spacer size="small" />
+            <Input
+              value={manualJoinCode}
+              onChangeText={(text) => setManualJoinCode(text.toUpperCase())}
+              placeholder="e.g. DCSM-CODE12-..."
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+
+            <Spacer size="medium" />
+
+            <Button
+              title={isLinkingManual ? 'Linking...' : 'Link Dorm Manually'}
+              onPress={handleManualConnect}
+              variant="secondary"
+              disabled={isLinkingManual}
+            />
+
+            {notice && (
+              <>
+                <Spacer size="medium" />
+                <InlineNotification type={notice.type} text={notice.text} />
+              </>
+            )}
+
+            <Spacer size="large" />
+
+            <Text style={styles.centerText}>
+              Changed your mind? <InlineButton title="Go back" onPress={() => router.back()} />
+            </Text>
+
+            <Spacer size="large" />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -138,9 +254,18 @@ const styles = StyleSheet.create({
     zIndex: 9,
   },
   content: {
-    flex: 1,
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
   },
   heading: {
     fontFamily: 'Inter-Bold',
@@ -160,7 +285,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cameraWrapper: {
-    flex: 1,
+    height: 380,
+    minHeight: 320,
+    flexShrink: 0,
     borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: COLOURS.gray[100],
@@ -170,7 +297,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
   },
   scannerContainer: {
     flex: 1,
@@ -202,5 +330,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLOURS.black,
     textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLOURS.gray[200],
   },
 });

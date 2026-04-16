@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Keyboard,
@@ -25,6 +26,9 @@ import NavBar, { NavBarItem } from '../../../components/Navbar';
 import ProfilePicture from '../../../components/ProfilePicture';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getCurrentUser } from '../../../lib/auth';
+import { getDormsByManager, getManagerOverview } from '../../../lib/dorms';
+import { getRepairRequests } from '../../../lib/repairs';
 
 const NAV_ITEMS: NavBarItem[] = [
   {
@@ -57,82 +61,26 @@ type RepairStatus = {
   textColor: string;
 };
 
-const PRIORITY_REPAIRS: {
+type DashboardRepairItem = {
   id: string;
   title: string;
   subtitle: string;
   iconName: IconName;
   status: RepairStatus;
-}[] = [
-  {
-    id: '1',
-    title: 'Broken bathroom light',
-    subtitle: 'Maple House - Reported by Person 1 - 20/03/2026',
-    iconName: 'lightbulb',
-    status: {
-      label: 'High',
-      backgroundColor: COLOURS.error.background,
-      textColor: COLOURS.error.text,
-    },
-  },
-  {
-    id: '2',
-    title: 'Leaking kitchen tap',
-    subtitle: 'Oak Lodge - Reported by Person 2 - 18/03/2026',
-    iconName: 'faucet',
-    status: {
-      label: 'Medium',
-      backgroundColor: COLOURS.warning.background,
-      textColor: COLOURS.warning.text,
-    },
-  },
-  {
-    id: '3',
-    title: 'Broken door hinge',
-    subtitle: 'Maple House - Reported by Person 3 - 15/03/2026',
-    iconName: 'door-open',
-    status: {
-      label: 'Low',
-      backgroundColor: COLOURS.info.background,
-      textColor: COLOURS.info.text,
-    },
-  },
-];
-
-const RECENT_REPAIRS: {
-  id: string;
-  title: string;
-  subtitle: string;
-  iconName: IconName;
-  status: RepairStatus;
-}[] = [
-  {
-    id: '1',
-    title: 'Fix broken sink',
-    subtitle: 'Oak Lodge - Reported by Person 4 - 14/03/2026',
-    iconName: 'faucet',
-    status: {
-      label: 'In progress',
-      backgroundColor: COLOURS.warning.background,
-      textColor: COLOURS.warning.text,
-    },
-  },
-  {
-    id: '2',
-    title: 'Replace hallway bulb',
-    subtitle: 'Elm Court - Reported by Person 5 - 12/03/2026',
-    iconName: 'lightbulb',
-    status: {
-      label: 'Pending',
-      backgroundColor: COLOURS.info.background,
-      textColor: COLOURS.info.text,
-    },
-  },
-];
+};
 
 export default function Dashboard() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [overview, setOverview] = useState({
+    openRepairs: 0,
+    inProgress: 0,
+    resolved: 0,
+    dormCount: 0,
+  });
+  const [priorityRepairs, setPriorityRepairs] = useState<DashboardRepairItem[]>([]);
+  const [recentRepairs, setRecentRepairs] = useState<DashboardRepairItem[]>([]);
 
   const [contentOverflows, setContentOverflows] = useState(false);
   const scrollViewHeight = useRef(0);
@@ -140,6 +88,145 @@ export default function Dashboard() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const mapIcon = (location: string): IconName => {
+    const value = String(location || '').toLowerCase();
+    if (value.includes('bath')) return 'bath';
+    if (value.includes('kitchen')) return 'utensils';
+    if (value.includes('door')) return 'door-open';
+    if (value.includes('light')) return 'lightbulb';
+    return 'wrench';
+  };
+
+  const urgencyChip = (urgency: string): RepairStatus => {
+    const normalized = String(urgency || 'low').toLowerCase();
+    if (normalized === 'high') {
+      return {
+        label: 'High',
+        backgroundColor: COLOURS.error.background,
+        textColor: COLOURS.error.text,
+      };
+    }
+    if (normalized === 'medium') {
+      return {
+        label: 'Medium',
+        backgroundColor: COLOURS.warning.background,
+        textColor: COLOURS.warning.text,
+      };
+    }
+    return {
+      label: 'Low',
+      backgroundColor: COLOURS.info.background,
+      textColor: COLOURS.info.text,
+    };
+  };
+
+  const workflowChip = (status: string): RepairStatus => {
+    const normalized = String(status || 'pending').toLowerCase();
+    if (normalized === 'in_progress') {
+      return {
+        label: 'In progress',
+        backgroundColor: COLOURS.warning.background,
+        textColor: COLOURS.warning.text,
+      };
+    }
+    if (normalized === 'completed' || normalized === 'resolved') {
+      return {
+        label: 'Resolved',
+        backgroundColor: COLOURS.success.background,
+        textColor: COLOURS.success.text,
+      };
+    }
+    return {
+      label: 'Pending',
+      backgroundColor: COLOURS.info.background,
+      textColor: COLOURS.info.text,
+    };
+  };
+
+  const loadDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        setOverview({ openRepairs: 0, inProgress: 0, resolved: 0, dormCount: 0 });
+        setPriorityRepairs([]);
+        setRecentRepairs([]);
+        return;
+      }
+
+      const [overviewStats, dorms] = await Promise.all([
+        getManagerOverview(user.id),
+        getDormsByManager(user.id),
+      ]);
+
+      const requestPairs = await Promise.all(
+        dorms.map(async (dorm) => ({
+          dormName: dorm.name,
+          requests: (await getRepairRequests(dorm.id)) || [],
+        })),
+      );
+
+      const allRequests = requestPairs.flatMap(({ dormName, requests }) =>
+        requests.map((request: any) => ({
+          ...request,
+          dormName,
+        })),
+      );
+
+      const sortedByDate = [...allRequests].sort(
+        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+      );
+
+      const recent = sortedByDate.slice(0, 5).map((request: any) => ({
+        id: request.id,
+        title: request.title || 'Untitled repair request',
+        subtitle: `${request.dormName} - ${request.created_at ? new Date(request.created_at).toLocaleDateString('en-GB') : 'Unknown date'}`,
+        iconName: mapIcon(request.location),
+        status: workflowChip(request.status),
+      }));
+
+      const urgencyRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+      const priority = [...sortedByDate]
+        .sort((a, b) => {
+          const rankDiff =
+            (urgencyRank[String(b.urgency || 'low').toLowerCase()] || 0) -
+            (urgencyRank[String(a.urgency || 'low').toLowerCase()] || 0);
+          if (rankDiff !== 0) return rankDiff;
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        })
+        .slice(0, 3)
+        .map((request: any) => ({
+          id: request.id,
+          title: request.title || 'Untitled repair request',
+          subtitle: `${request.dormName} - ${request.created_at ? new Date(request.created_at).toLocaleDateString('en-GB') : 'Unknown date'}`,
+          iconName: mapIcon(request.location),
+          status: urgencyChip(request.urgency),
+        }));
+
+      setOverview({
+        openRepairs: overviewStats.openRepairs,
+        inProgress: allRequests.filter((r: any) => r.status === 'in_progress').length,
+        resolved: allRequests.filter((r: any) => r.status === 'completed').length,
+        dormCount: overviewStats.dormCount,
+      });
+      setPriorityRepairs(priority);
+      setRecentRepairs(recent);
+    } catch (error) {
+      console.warn('Failed to load manager dashboard data', error);
+      setOverview({ openRepairs: 0, inProgress: 0, resolved: 0, dormCount: 0 });
+      setPriorityRepairs([]);
+      setRecentRepairs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData]),
+  );
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -182,8 +269,8 @@ export default function Dashboard() {
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({ ...item }));
 
-  const noPriorityRepairs = PRIORITY_REPAIRS.length === 0;
-  const noRecentRepairs = RECENT_REPAIRS.length === 0;
+  const noPriorityRepairs = priorityRepairs.length === 0;
+  const noRecentRepairs = recentRepairs.length === 0;
 
   return (
     <View style={styles.container}>
@@ -235,10 +322,10 @@ export default function Dashboard() {
             <Text style={styles.title}>Overview</Text>
             <Spacer size="small" />
             <View style={styles.infoPanelGrid}>
-              <InfoPanel label="Open requests" value="5" />
-              <InfoPanel label="In progress" value="2" />
-              <InfoPanel label="Resolved this week" value="3" />
-              <InfoPanel label="Dorms managed" value="4" />
+              <InfoPanel label="Open requests" value={String(overview.openRepairs)} />
+              <InfoPanel label="In progress" value={String(overview.inProgress)} />
+              <InfoPanel label="Resolved" value={String(overview.resolved)} />
+              <InfoPanel label="Dorms managed" value={String(overview.dormCount)} />
             </View>
 
             <Spacer size="large" />
@@ -255,7 +342,13 @@ export default function Dashboard() {
 
             <Spacer size="medium" />
 
-            {noPriorityRepairs ? (
+            {isLoading ? (
+              <View
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 24 }}
+              >
+                <ActivityIndicator size="large" color={COLOURS.black} />
+              </View>
+            ) : noPriorityRepairs ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconWrapper}>
                   <FontAwesome5 name="check" size={40} color={COLOURS.black} />
@@ -267,16 +360,16 @@ export default function Dashboard() {
               </View>
             ) : (
               <View>
-                {PRIORITY_REPAIRS.map((repair, index) => (
+                {priorityRepairs.map((repair, index) => (
                   <View key={repair.id}>
                     <ListItem
                       title={repair.title}
                       subtitle={repair.subtitle}
                       iconName={repair.iconName}
-                      onPress={() => router.push('/main/manager/view-request')}
+                      onPress={() => router.push(`/main/manager/view-request?id=${repair.id}`)}
                       statusChip={repair.status}
                     />
-                    {index < PRIORITY_REPAIRS.length - 1 ? <Spacer size="small" /> : null}
+                    {index < priorityRepairs.length - 1 ? <Spacer size="small" /> : null}
                   </View>
                 ))}
               </View>
@@ -303,7 +396,13 @@ export default function Dashboard() {
 
             <Spacer size="medium" />
 
-            {noRecentRepairs ? (
+            {isLoading ? (
+              <View
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 24 }}
+              >
+                <ActivityIndicator size="large" color={COLOURS.black} />
+              </View>
+            ) : noRecentRepairs ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No recent activity</Text>
                 <Text style={styles.emptySubtitle}>
@@ -312,16 +411,16 @@ export default function Dashboard() {
               </View>
             ) : (
               <View>
-                {RECENT_REPAIRS.map((repair, index) => (
+                {recentRepairs.map((repair, index) => (
                   <View key={repair.id}>
                     <ListItem
                       title={repair.title}
                       subtitle={repair.subtitle}
                       iconName={repair.iconName}
-                      onPress={() => router.push('/main/manager/view-request')}
+                      onPress={() => router.push(`/main/manager/view-request?id=${repair.id}`)}
                       statusChip={repair.status}
                     />
-                    {index < RECENT_REPAIRS.length - 1 ? <Spacer size="small" /> : null}
+                    {index < recentRepairs.length - 1 ? <Spacer size="small" /> : null}
                   </View>
                 ))}
               </View>

@@ -5,6 +5,8 @@ import { supabase } from './supabase';
 
 const MAX_DORMS_CREATED_PER_USER = 3;
 const MAX_DORM_MEMBERSHIPS_PER_USER = 5;
+const MANAGER_QR_PREFIX = 'dcs://manager-link';
+const MANAGER_MANUAL_PREFIX = 'DCSM';
 
 function isMissingTableError(error: any): boolean {
   if (!error) return false;
@@ -47,6 +49,314 @@ export interface DormMember {
   user_id: string;
   dorm_id: string;
   joined_at: string;
+}
+
+export interface DormStats {
+  choreCompletionRate: number;
+  openRepairs: number;
+  memberCount: number;
+  totalChores: number;
+  completedChores: number;
+}
+
+export interface ManagerOverview {
+  dormCount: number;
+  choreCompletionRate: number;
+  openRepairs: number;
+  memberCount: number;
+}
+
+export interface ManagerDormLinkPayload {
+  dormId: string;
+  joinCode: string;
+}
+
+function calculateManagerCodeChecksum(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36).toUpperCase().padStart(4, '0').slice(-4);
+}
+
+function toUuidFromCompact(compact: string): string {
+  return `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20, 32)}`.toLowerCase();
+}
+
+export function parseManagerDormLinkPayload(rawPayload: string): ManagerDormLinkPayload {
+  if (!rawPayload?.trim()) {
+    throw new Error('QR code is empty');
+  }
+
+  if (!rawPayload.startsWith(MANAGER_QR_PREFIX)) {
+    throw new Error('Invalid QR code for dorm-manager linking');
+  }
+
+  const url = new URL(rawPayload);
+  const dormId = (url.searchParams.get('dormId') || '').trim();
+  const joinCode = (url.searchParams.get('joinCode') || '').trim().toUpperCase();
+
+  if (!dormId || !joinCode) {
+    throw new Error('QR code is missing required dorm details');
+  }
+
+  return { dormId, joinCode };
+}
+
+export async function createManagerDormLinkPayload(dormId: string): Promise<string> {
+  if (!dormId) {
+    throw new Error('Dorm ID is required');
+  }
+
+  const dorm = await getDormById(dormId);
+  if (!dorm) {
+    throw new Error('Dorm not found');
+  }
+
+  const query = new URLSearchParams({
+    dormId: dorm.id,
+    joinCode: dorm.join_code,
+  });
+
+  return `${MANAGER_QR_PREFIX}?${query.toString()}`;
+}
+
+export async function createManagerDormManualCode(dormId: string): Promise<string> {
+  if (!dormId) {
+    throw new Error('Dorm ID is required');
+  }
+
+  const dorm = await getDormById(dormId);
+  if (!dorm) {
+    throw new Error('Dorm not found');
+  }
+
+  const compactDormId = dorm.id.replace(/-/g, '').toUpperCase();
+  const normalizedJoinCode = dorm.join_code.trim().toUpperCase();
+  const checksum = calculateManagerCodeChecksum(`${normalizedJoinCode}${compactDormId}`);
+
+  return [
+    MANAGER_MANUAL_PREFIX,
+    normalizedJoinCode,
+    compactDormId.slice(0, 8),
+    compactDormId.slice(8, 16),
+    compactDormId.slice(16, 24),
+    compactDormId.slice(24, 32),
+    checksum,
+  ].join('-');
+}
+
+export function parseManagerDormManualCode(manualCode: string): ManagerDormLinkPayload {
+  const raw = manualCode.trim().toUpperCase();
+  const parts = raw.split('-');
+
+  if (parts.length !== 7 || parts[0] !== MANAGER_MANUAL_PREFIX) {
+    throw new Error('Invalid manager connect code format');
+  }
+
+  const [, joinCode, id1, id2, id3, id4, checksum] = parts;
+  const compactDormId = `${id1}${id2}${id3}${id4}`;
+
+  if (!/^[A-Z0-9]{6}$/.test(joinCode)) {
+    throw new Error('Invalid manager connect code join segment');
+  }
+
+  if (!/^[0-9A-F]{32}$/.test(compactDormId)) {
+    throw new Error('Invalid manager connect code dorm segment');
+  }
+
+  const expectedChecksum = calculateManagerCodeChecksum(`${joinCode}${compactDormId}`);
+  if (checksum !== expectedChecksum) {
+    throw new Error('Manager connect code checksum is invalid');
+  }
+
+  return {
+    joinCode,
+    dormId: toUuidFromCompact(compactDormId),
+  };
+}
+
+export async function linkDormToManagerByQr(
+  managerUserId: string,
+  qrPayload: string,
+): Promise<Dorm> {
+  if (!managerUserId) {
+    throw new Error('Manager user ID is required');
+  }
+
+  const parsed = parseManagerDormLinkPayload(qrPayload);
+
+  const { data: managerProfile, error: managerProfileError } = await supabase
+    .from('profiles')
+    .select('is_manager')
+    .eq('id', managerUserId)
+    .single();
+
+  if (managerProfileError) {
+    throw new Error(formatErrorMessage(managerProfileError.message));
+  }
+
+  if (!managerProfile?.is_manager) {
+    throw new Error('Only managers can link dorms by QR code');
+  }
+
+  const { data: dorm, error: dormError } = await supabase
+    .from('dorms')
+    .select('id, join_code')
+    .eq('id', parsed.dormId)
+    .single();
+
+  if (dormError || !dorm) {
+    throw new Error('Dorm not found for this QR code');
+  }
+
+  if (String(dorm.join_code).toUpperCase() !== parsed.joinCode) {
+    throw new Error('QR code does not match dorm details');
+  }
+
+  const { data: updatedDorm, error: updateError } = await supabase
+    .from('dorms')
+    .update({ created_by: managerUserId })
+    .eq('id', parsed.dormId)
+    .select('*')
+    .maybeSingle();
+
+  if (updateError) {
+    throw new Error(formatErrorMessage(updateError.message));
+  }
+
+  if (!updatedDorm) {
+    throw new Error(
+      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
+    );
+  }
+
+  return updatedDorm as Dorm;
+}
+
+export async function linkDormToManagerByJoinCode(
+  managerUserId: string,
+  joinCode: string,
+): Promise<Dorm> {
+  if (!managerUserId) {
+    throw new Error('Manager user ID is required');
+  }
+
+  const normalizedJoinCode = joinCode.trim().toUpperCase();
+  if (!normalizedJoinCode) {
+    throw new Error('Join code is required');
+  }
+
+  const { data: managerProfile, error: managerProfileError } = await supabase
+    .from('profiles')
+    .select('is_manager')
+    .eq('id', managerUserId)
+    .single();
+
+  if (managerProfileError) {
+    throw new Error(formatErrorMessage(managerProfileError.message));
+  }
+
+  if (!managerProfile?.is_manager) {
+    throw new Error('Only managers can link dorms by join code');
+  }
+
+  const { data: dormMatches, error: dormError } = await supabase
+    .from('dorms')
+    .select('id')
+    .eq('join_code', normalizedJoinCode)
+    .limit(2);
+
+  if (dormError) {
+    throw new Error(formatErrorMessage(dormError.message));
+  }
+
+  if (!dormMatches || dormMatches.length === 0) {
+    throw new Error('Invalid join code or dorm not found');
+  }
+
+  if (dormMatches.length > 1) {
+    throw new Error('This join code matches multiple dorms. Please use the manager connect code.');
+  }
+
+  const dorm = dormMatches[0];
+
+  const { data: updatedDorm, error: updateError } = await supabase
+    .from('dorms')
+    .update({ created_by: managerUserId })
+    .eq('id', dorm.id)
+    .select('*')
+    .maybeSingle();
+
+  if (updateError) {
+    throw new Error(formatErrorMessage(updateError.message));
+  }
+
+  if (!updatedDorm) {
+    throw new Error(
+      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
+    );
+  }
+
+  return updatedDorm as Dorm;
+}
+
+export async function linkDormToManagerByManualCode(
+  managerUserId: string,
+  manualCode: string,
+): Promise<Dorm> {
+  if (!managerUserId) {
+    throw new Error('Manager user ID is required');
+  }
+
+  const parsed = parseManagerDormManualCode(manualCode);
+
+  const { data: managerProfile, error: managerProfileError } = await supabase
+    .from('profiles')
+    .select('is_manager')
+    .eq('id', managerUserId)
+    .single();
+
+  if (managerProfileError) {
+    throw new Error(formatErrorMessage(managerProfileError.message));
+  }
+
+  if (!managerProfile?.is_manager) {
+    throw new Error('Only managers can link dorms by manager connect code');
+  }
+
+  const { data: dorm, error: dormError } = await supabase
+    .from('dorms')
+    .select('id, join_code')
+    .eq('id', parsed.dormId)
+    .single();
+
+  if (dormError || !dorm) {
+    throw new Error('Dorm not found for this manager connect code');
+  }
+
+  if (String(dorm.join_code).toUpperCase() !== parsed.joinCode) {
+    throw new Error('Manager connect code does not match dorm details');
+  }
+
+  const { data: updatedDorm, error: updateError } = await supabase
+    .from('dorms')
+    .update({ created_by: managerUserId })
+    .eq('id', parsed.dormId)
+    .select('*')
+    .maybeSingle();
+
+  if (updateError) {
+    throw new Error(formatErrorMessage(updateError.message));
+  }
+
+  if (!updatedDorm) {
+    throw new Error(
+      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
+    );
+  }
+
+  return updatedDorm as Dorm;
 }
 
 export async function getDormById(dormId: string): Promise<Dorm | null> {
@@ -338,4 +648,83 @@ export async function setActiveDormId(dormId: string): Promise<void> {
   const user = await getCurrentUser();
   if (!user?.id) return;
   await AsyncStorage.setItem(`active_dorm_id_${user.id}`, dormId);
+}
+
+export async function getDormStats(dormId: string): Promise<DormStats> {
+  if (!dormId) throw new Error('Dorm ID is required');
+
+  const [totalChoresResult, completedChoresResult, openRepairsResult, memberCountResult] =
+    await Promise.all([
+      supabase
+        .from('chores')
+        .select('id', { count: 'exact', head: true })
+        .match({ dorm_id: dormId }),
+      supabase
+        .from('chores')
+        .select('id', { count: 'exact', head: true })
+        .match({ dorm_id: dormId, status: 'completed' }),
+      supabase
+        .from('repair_requests')
+        .select('id', { count: 'exact', head: true })
+        .match({ dorm_id: dormId })
+        .in('status', ['pending', 'in_progress']),
+      supabase
+        .from('dorm_members')
+        .select('user_id', { count: 'exact', head: true })
+        .match({ dorm_id: dormId }),
+    ]);
+
+  if (totalChoresResult.error) throw new Error(formatErrorMessage(totalChoresResult.error.message));
+  if (completedChoresResult.error) {
+    throw new Error(formatErrorMessage(completedChoresResult.error.message));
+  }
+  if (openRepairsResult.error) throw new Error(formatErrorMessage(openRepairsResult.error.message));
+  if (memberCountResult.error) throw new Error(formatErrorMessage(memberCountResult.error.message));
+
+  const totalChores = totalChoresResult.count || 0;
+  const completedChores = completedChoresResult.count || 0;
+  const openRepairs = openRepairsResult.count || 0;
+  const memberCount = memberCountResult.count || 0;
+
+  return {
+    choreCompletionRate: totalChores > 0 ? Math.round((completedChores / totalChores) * 100) : 0,
+    openRepairs,
+    memberCount,
+    totalChores,
+    completedChores,
+  };
+}
+
+export async function getManagerOverview(managerId: string): Promise<ManagerOverview> {
+  if (!managerId) throw new Error('Manager ID is required');
+
+  const dorms = await getDormsByManager(managerId);
+  if (dorms.length === 0) {
+    return {
+      dormCount: 0,
+      choreCompletionRate: 0,
+      openRepairs: 0,
+      memberCount: 0,
+    };
+  }
+
+  let totalOpenRepairs = 0;
+  let totalMembers = 0;
+  let totalChores = 0;
+  let completedChores = 0;
+
+  for (const dorm of dorms) {
+    const stats = await getDormStats(dorm.id);
+    totalOpenRepairs += stats.openRepairs;
+    totalMembers += stats.memberCount;
+    totalChores += stats.totalChores;
+    completedChores += stats.completedChores;
+  }
+
+  return {
+    dormCount: dorms.length,
+    choreCompletionRate: totalChores > 0 ? Math.round((completedChores / totalChores) * 100) : 0,
+    openRepairs: totalOpenRepairs,
+    memberCount: totalMembers,
+  };
 }

@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Keyboard,
@@ -18,33 +19,72 @@ import {
 import Button from '../../../components/Button';
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
+import InlineNotification from '../../../components/InlineNotification';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { deleteRepairRequest, getRepairRequestById } from '../../../lib/repairs';
 
 const GRADIENT_THRESHOLD = 24;
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-};
+function toSentenceCase(value: string | undefined | null, fallback: string): string {
+  const normalized = String(value || '')
+    .replace(/_/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (!normalized) return fallback;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
 
-// TODO: Replace with data fetched from API based on repair ID passed via route params
-const REPAIR = {
-  title: 'Broken bathroom light',
-  description: 'The overhead light has stopped working. Replaced the bulb but the issue persists',
-  category: 'Bathroom',
-  priority: 'High',
-  status: 'pending',
-  reportedBy: 'Person 1',
-  reportedAt: '20/03/2026',
+type RepairDetail = {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  urgency: string;
+  status: string;
+  submitted_by?: string;
+  created_at?: string;
 };
 
 export default function ViewRepair() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [repair, setRepair] = useState<RepairDetail | null>(null);
+  const [notice, setNotice] = useState<{
+    type: 'error' | 'success' | 'info' | 'warning' | 'tip';
+    text: string;
+  } | null>(null);
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loadRepair = async () => {
+      const requestId = Array.isArray(id) ? id[0] : id;
+      if (!requestId) {
+        setNotice({ type: 'error', text: 'Repair request ID is missing' });
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const data = await getRepairRequestById(requestId);
+        if (!data) {
+          setNotice({ type: 'error', text: 'Repair request not found' });
+          setRepair(null);
+          return;
+        }
+        setRepair(data as RepairDetail);
+      } catch (e: any) {
+        setNotice({ type: 'error', text: e?.message || 'Failed to load repair request' });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadRepair();
+  }, [id]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -74,10 +114,20 @@ export default function ViewRepair() {
     headerGradientOpacity.setValue(headerValue);
   };
 
-  const handleCancelConfirmed = useCallback(() => {
-    // TODO: cancel repair via API
-    router.push('/main/student/repairs');
-  }, []);
+  const handleCancelConfirmed = useCallback(async () => {
+    const requestId = Array.isArray(id) ? id[0] : id;
+    if (!requestId) {
+      setNotice({ type: 'error', text: 'Repair request ID is missing' });
+      return;
+    }
+
+    try {
+      await deleteRepairRequest(requestId);
+      router.push('/main/student/repairs');
+    } catch (e: any) {
+      setNotice({ type: 'error', text: e?.message || 'Failed to cancel repair' });
+    }
+  }, [id]);
 
   return (
     <View style={styles.container}>
@@ -115,76 +165,104 @@ export default function ViewRepair() {
           scrollEventThrottle={16}
         >
           <View style={styles.content}>
-            <Text style={styles.heading}>{REPAIR.title}</Text>
-
-            <Spacer size="small" />
-
-            <Text style={styles.subheading}>
-              Reported by {REPAIR.reportedBy} on {REPAIR.reportedAt}
-            </Text>
-
-            <Spacer size="large" />
-
-            {REPAIR.description ? (
+            {isLoading ? (
+              <ActivityIndicator size="large" color={COLOURS.black} />
+            ) : !repair ? (
               <>
-                <Text style={styles.fieldLabel}>Description</Text>
-                <Text style={styles.fieldValue}>{REPAIR.description}</Text>
+                <Text style={styles.heading}>Repair request</Text>
                 <Spacer size="medium" />
-              </>
-            ) : null}
-
-            <Text style={styles.fieldLabel}>Category</Text>
-            <Text style={styles.fieldValue}>{REPAIR.category}</Text>
-
-            <Spacer size="medium" />
-
-            <Text style={styles.fieldLabel}>Priority</Text>
-            <Text style={styles.fieldValue}>{REPAIR.priority}</Text>
-
-            <Spacer size="medium" />
-
-            <Text style={styles.fieldLabel}>Status</Text>
-            <Text style={styles.fieldValue}>{STATUS_LABELS[REPAIR.status] ?? REPAIR.status}</Text>
-
-            <Spacer size="large" />
-
-            <View style={styles.divider} />
-
-            <Spacer size="large" />
-
-            <Text style={styles.inputLabel}>Cancel repair</Text>
-
-            <Spacer size="small" />
-
-            <Text style={styles.subheading}>
-              If the issue has been resolved or was raised in error you can cancel this request. You
-              will need to submit a new one if the problem returns
-            </Text>
-
-            <Spacer size="medium" />
-
-            {confirmingCancel ? (
-              <>
-                <Text style={styles.inputLabel}>Are you sure?</Text>
-
-                <Spacer size="small" />
-
-                <Text style={styles.subheading}>This action cannot be reversed once confirmed</Text>
-
-                <Spacer size="medium" />
-
-                <Button
-                  title="Yes, cancel repair"
-                  onPress={handleCancelConfirmed}
-                  variant="danger"
+                <InlineNotification
+                  type="error"
+                  text={notice?.text || 'Repair request is unavailable'}
                 />
               </>
             ) : (
-              <Button
-                title="Cancel repair"
-                onPress={() => setConfirmingCancel(true)}
-                variant="danger"
-              />
+              <>
+                <Text style={styles.heading}>{repair.title}</Text>
+
+                <Spacer size="small" />
+
+                <Text style={styles.subheading}>
+                  Reported on{' '}
+                  {repair.created_at
+                    ? new Date(repair.created_at).toLocaleDateString('en-GB')
+                    : 'Unknown date'}
+                </Text>
+
+                <Spacer size="large" />
+
+                <Text style={styles.fieldLabel}>Description</Text>
+                <Text style={styles.fieldValue}>
+                  {repair.description || 'No description provided'}
+                </Text>
+                <Spacer size="medium" />
+                <Spacer size="small" />
+
+                <Text style={styles.fieldLabel}>Location</Text>
+                <Text style={styles.fieldValue}>
+                  {toSentenceCase(repair.location, 'Unknown location')}
+                </Text>
+
+                <Spacer size="medium" />
+
+                <Text style={styles.fieldLabel}>Priority</Text>
+                <Text style={styles.fieldValue}>{toSentenceCase(repair.urgency, 'Low')}</Text>
+
+                <Spacer size="medium" />
+
+                <Text style={styles.fieldLabel}>Status</Text>
+                <Text style={styles.fieldValue}>{toSentenceCase(repair.status, 'Pending')}</Text>
+
+                <Spacer size="large" />
+
+                <View style={styles.divider} />
+
+                <Spacer size="large" />
+
+                <Text style={styles.inputLabel}>Cancel repair</Text>
+
+                <Spacer size="small" />
+
+                <Text style={styles.subheading}>
+                  If the issue has been resolved or was raised in error you can cancel this request.
+                  You will need to submit a new one if the problem returns
+                </Text>
+
+                <Spacer size="medium" />
+
+                {confirmingCancel ? (
+                  <>
+                    <Text style={styles.inputLabel}>Are you sure?</Text>
+
+                    <Spacer size="small" />
+
+                    <Text style={styles.subheading}>
+                      This action cannot be reversed once confirmed
+                    </Text>
+
+                    <Spacer size="medium" />
+
+                    <Button
+                      title="Yes, cancel repair"
+                      onPress={handleCancelConfirmed}
+                      variant="danger"
+                    />
+                  </>
+                ) : (
+                  <Button
+                    title="Cancel repair"
+                    onPress={() => setConfirmingCancel(true)}
+                    variant="danger"
+                  />
+                )}
+              </>
+            )}
+
+            {notice && (
+              <>
+                <Spacer size="medium" />
+                <InlineNotification type={notice.type} text={notice.text} />
+              </>
             )}
 
             <Spacer size="large" />

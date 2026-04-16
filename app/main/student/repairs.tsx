@@ -13,10 +13,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import { getRepairRequestsByReporter } from '../../../lib/repairs';
-import { supabase } from '../../../lib/supabase';
 
 import { FontAwesome5 } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -30,7 +29,14 @@ import ProfilePicture from '../../../components/ProfilePicture';
 import SortDropdown from '../../../components/SortDropdown';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
-import { getActiveDormId } from '../../../lib/dorms';
+import { getCurrentUser } from '../../../lib/auth';
+import {
+  createManagerDormLinkPayload,
+  createManagerDormManualCode,
+  getActiveDormId,
+} from '../../../lib/dorms';
+import { getRepairRequestsByReporter } from '../../../lib/repairs';
+import { supabase } from '../../../lib/supabase';
 
 const FILTER_OPTIONS = ['All', 'Mine', 'Completed'];
 const SORT_OPTIONS = ['Due Date'];
@@ -67,22 +73,17 @@ type RepairSummary = {
   title: string;
   iconName: keyof typeof FontAwesome5.glyphMap;
   subtitle: string;
+  statusChip: {
+    label: string;
+    backgroundColor: string;
+    textColor: string;
+  };
 };
 
-const REPAIR_REQUESTS: RepairSummary[] = [
-  {
-    id: '1',
-    title: 'Fix broken sink',
-    iconName: 'faucet',
-    subtitle: 'Created by You - 20/02/2026',
-  },
-  {
-    id: '2',
-    title: 'Repair door lock',
-    iconName: 'door-closed',
-    subtitle: 'Created by Person 2 - 18/02/2026',
-  },
-];
+type ManagerAvailability = {
+  name: string;
+  status: 'available' | 'unavailable' | 'unknown';
+};
 
 const GRADIENT_THRESHOLD = 24;
 
@@ -92,8 +93,12 @@ export default function Repairs() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [sortBy, setSortBy] = useState('Due Date');
   const [isLoading, setIsLoading] = useState(true);
-  const isConnected = true; // Defines whether the user is connected to a manager (i.e. has access to repair requests) or not. Set to false to show the "not connected" state.
-  const qrValue = 'dorm-chores-scheduler:manager-connect:sample';
+  const [isConnected, setIsConnected] = useState(true);
+  const [qrValue, setQrValue] = useState('');
+  const [manualConnectCode, setManualConnectCode] = useState('');
+  const [isManualCodeOpen, setIsManualCodeOpen] = useState(false);
+  const [repairRequests, setRepairRequests] = useState<RepairSummary[]>([]);
+  const [managerAvailability, setManagerAvailability] = useState<ManagerAvailability | null>(null);
 
   const [contentOverflows, setContentOverflows] = useState(false);
   const scrollViewHeight = useRef(0);
@@ -101,6 +106,40 @@ export default function Repairs() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const getRepairStatusChip = (status: string) => {
+    const normalized = String(status || 'pending').toLowerCase();
+
+    if (normalized === 'in_progress') {
+      return {
+        label: 'In progress',
+        backgroundColor: COLOURS.warning.background,
+        textColor: COLOURS.warning.text,
+      };
+    }
+
+    if (normalized === 'completed' || normalized === 'resolved') {
+      return {
+        label: 'Resolved',
+        backgroundColor: COLOURS.success.background,
+        textColor: COLOURS.success.text,
+      };
+    }
+
+    if (normalized === 'rejected') {
+      return {
+        label: 'Rejected',
+        backgroundColor: COLOURS.error.background,
+        textColor: COLOURS.error.text,
+      };
+    }
+
+    return {
+      label: 'Pending',
+      backgroundColor: COLOURS.info.background,
+      textColor: COLOURS.info.text,
+    };
+  };
 
   const loadRepairsState = async () => {
     setIsLoading(true);
@@ -110,6 +149,82 @@ export default function Repairs() {
       if (!activeDormId) {
         router.replace('/main/student/dorms');
         return;
+      }
+
+      const user = await getCurrentUser();
+
+      const { data: dorm, error: dormError } = await supabase
+        .from('dorms')
+        .select('created_by')
+        .eq('id', activeDormId)
+        .single();
+
+      if (dormError) {
+        throw dormError;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('is_manager, display_name, availability_status')
+        .eq('id', dorm.created_by)
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      const linkedToManager = !!profile?.is_manager && dorm.created_by !== user?.id;
+      setIsConnected(linkedToManager);
+
+      if (!linkedToManager) {
+        setManagerAvailability(null);
+        setIsManualCodeOpen(false);
+        const payload = await createManagerDormLinkPayload(activeDormId);
+        setQrValue(payload);
+        const code = await createManagerDormManualCode(activeDormId);
+        setManualConnectCode(code);
+        setRepairRequests([]);
+      } else if (user?.id) {
+        const managerName = String(profile?.display_name || '').trim() || 'Manager';
+        const rawStatus = String(profile?.availability_status || '').toLowerCase();
+        const status: ManagerAvailability['status'] =
+          rawStatus === 'available' || rawStatus === 'unavailable' ? rawStatus : 'unknown';
+
+        setManagerAvailability({
+          name: managerName,
+          status,
+        });
+
+        setQrValue('');
+        setManualConnectCode('');
+        const requests = (await getRepairRequestsByReporter(user.id)) || [];
+        const mapped: RepairSummary[] = requests.map((request: any) => {
+          const createdAt = request.created_at ? new Date(request.created_at) : null;
+          const createdAtText = createdAt
+            ? `${createdAt.getDate().toString().padStart(2, '0')}/${(createdAt.getMonth() + 1)
+                .toString()
+                .padStart(2, '0')}/${createdAt.getFullYear()}`
+            : 'Unknown date';
+
+          const locationText = String(request.location || '').toLowerCase();
+          const iconName: keyof typeof FontAwesome5.glyphMap = locationText.includes('bath')
+            ? 'bath'
+            : locationText.includes('kitchen')
+              ? 'utensils'
+              : locationText.includes('door')
+                ? 'door-open'
+                : 'wrench';
+
+          return {
+            id: request.id,
+            title: request.title || 'Untitled repair request',
+            iconName,
+            subtitle: `Created by You - ${createdAtText}`,
+            statusChip: getRepairStatusChip(String(request.status || 'pending')),
+          };
+        });
+
+        setRepairRequests(mapped);
       }
     } catch (error) {
       console.warn('Failed to load repairs state', error);
@@ -167,7 +282,7 @@ export default function Repairs() {
     ...item,
   }));
 
-  const isEmpty = REPAIR_REQUESTS.length === 0;
+  const isEmpty = repairRequests.length === 0;
 
   return (
     <View style={styles.container}>
@@ -218,6 +333,36 @@ export default function Repairs() {
             {isConnected ? (
               <>
                 <Text style={styles.title}>Repair requests</Text>
+                {managerAvailability && (
+                  <>
+                    <Spacer size="small" />
+                    <View style={styles.managerAvailabilityCard}>
+                      <View style={styles.managerAvailabilityTitleRow}>
+                        <FontAwesome5 name="user-tie" size={12} color={COLOURS.black} />
+                        <Text style={styles.managerAvailabilityTitle}>Manager availability</Text>
+                      </View>
+                      <Spacer size="small" />
+                      <Text style={styles.managerAvailabilityText}>
+                        {managerAvailability.name} is{' '}
+                        <Text
+                          style={
+                            managerAvailability.status === 'available'
+                              ? styles.managerAvailableText
+                              : managerAvailability.status === 'unavailable'
+                                ? styles.managerUnavailableText
+                                : styles.managerUnknownText
+                          }
+                        >
+                          {managerAvailability.status === 'available'
+                            ? 'Available'
+                            : managerAvailability.status === 'unavailable'
+                              ? 'Unavailable'
+                              : 'Unknown'}
+                        </Text>
+                      </Text>
+                    </View>
+                  </>
+                )}
 
                 {isLoading ? (
                   <View
@@ -273,16 +418,17 @@ export default function Repairs() {
 
                     <Spacer size="medium" />
 
-                    {REPAIR_REQUESTS.map((request, index) => (
+                    {repairRequests.map((request, index) => (
                       <View key={request.id}>
                         <ListItem
                           title={request.title}
                           iconName={request.iconName}
                           subtitle={request.subtitle}
-                          onPress={() => router.push(`/main/student/view-repair`)}
+                          statusChip={request.statusChip}
+                          onPress={() => router.push(`/main/student/view-repair?id=${request.id}`)}
                         />
 
-                        {index < REPAIR_REQUESTS.length - 1 && <Spacer size="small" />}
+                        {index < repairRequests.length - 1 && <Spacer size="small" />}
                       </View>
                     ))}
                   </>
@@ -294,7 +440,11 @@ export default function Repairs() {
               <View style={styles.notConnected}>
                 <Spacer size="large" />
                 <View style={styles.qrCode}>
-                  <QRCode value={qrValue} size={300} />
+                  {qrValue.trim() ? (
+                    <QRCode value={qrValue} size={300} />
+                  ) : (
+                    <ActivityIndicator size="large" color={COLOURS.white} />
+                  )}
                 </View>
                 <Spacer size="large" />
                 <View style={styles.qrIconWrapper}>
@@ -305,6 +455,38 @@ export default function Repairs() {
                   To begin sending repair requests, your building manager must scan the above QR
                   code.
                 </Text>
+
+                {manualConnectCode ? (
+                  <>
+                    <Spacer size="medium" />
+                    <View style={styles.manualCodeDropdownContainer}>
+                      <TouchableOpacity
+                        style={styles.manualCodeDropdownHeader}
+                        onPress={() => setIsManualCodeOpen((prev) => !prev)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.manualCodeLabel}>Show manager connect code</Text>
+                        <FontAwesome5
+                          name={isManualCodeOpen ? 'chevron-up' : 'chevron-down'}
+                          size={14}
+                          color={COLOURS.black}
+                        />
+                      </TouchableOpacity>
+
+                      {isManualCodeOpen ? (
+                        <View style={styles.manualCodeDropdownContent}>
+                          <View style={styles.manualCodeBox}>
+                            <Text style={styles.manualCodeText} selectable>
+                              {manualConnectCode}
+                            </Text>
+                          </View>
+                          <Spacer size="small" />
+                          <Text style={styles.notConnectedSubtitle}>Press and hold to copy</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </>
+                ) : null}
               </View>
             )}
           </View>
@@ -403,6 +585,41 @@ const styles = StyleSheet.create({
     color: COLOURS.gray[700],
     lineHeight: 24,
   },
+  managerAvailabilityCard: {
+    borderWidth: 1,
+    borderColor: COLOURS.gray[200],
+    borderRadius: 12,
+    backgroundColor: COLOURS.gray[100],
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  managerAvailabilityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  managerAvailabilityTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 12,
+    color: COLOURS.black,
+  },
+  managerAvailabilityText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLOURS.black,
+  },
+  managerAvailableText: {
+    color: COLOURS.success.text,
+    fontFamily: 'Inter-Bold',
+  },
+  managerUnavailableText: {
+    color: COLOURS.error.text,
+    fontFamily: 'Inter-Bold',
+  },
+  managerUnknownText: {
+    color: COLOURS.info.text,
+    fontFamily: 'Inter-Bold',
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -493,6 +710,48 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     color: COLOURS.gray[700],
+    textAlign: 'center',
+  },
+  manualCodeLabel: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 14,
+    color: COLOURS.black,
+  },
+  manualCodeDropdownContainer: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLOURS.gray[300],
+    borderRadius: 12,
+    backgroundColor: COLOURS.white,
+    overflow: 'hidden',
+  },
+  manualCodeDropdownHeader: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  manualCodeDropdownContent: {
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.gray[200],
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  manualCodeBox: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOURS.gray[300],
+    backgroundColor: COLOURS.gray[100],
+  },
+  manualCodeText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 18,
+    color: COLOURS.black,
+    letterSpacing: 1,
     textAlign: 'center',
   },
 });

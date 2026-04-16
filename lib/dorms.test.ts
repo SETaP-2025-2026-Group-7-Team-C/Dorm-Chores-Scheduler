@@ -1,11 +1,20 @@
 import { getCurrentUser } from './auth';
 import {
   createDorm,
+  createManagerDormLinkPayload,
+  createManagerDormManualCode,
   deleteDorm,
   getDormById,
+  getDormStats,
   getDormsByManager,
+  getManagerOverview,
   joinDorm,
   leaveDorm,
+  linkDormToManagerByJoinCode,
+  linkDormToManagerByManualCode,
+  linkDormToManagerByQr,
+  parseManagerDormLinkPayload,
+  parseManagerDormManualCode,
   updateDorm,
 } from './dorms';
 import { supabase } from './supabase';
@@ -31,6 +40,8 @@ describe('Dorms System', () => {
       update: jest.fn().mockReturnThis(),
       delete: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
       maybeSingle: jest.fn().mockReturnThis(),
       match: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
@@ -151,6 +162,229 @@ describe('Dorms System', () => {
     it('leaves a dorm successfully', async () => {
       mockSupabase.match.mockResolvedValueOnce({ error: null });
       await expect(leaveDorm('user-1', 'dorm-1')).resolves.not.toThrow();
+    });
+  });
+
+  describe('manager dorm QR linking', () => {
+    it('builds QR payload from a valid dorm', async () => {
+      mockSupabase.single.mockResolvedValueOnce({
+        data: { id: 'dorm-1', join_code: 'CODE12' },
+        error: null,
+      });
+
+      const payload = await createManagerDormLinkPayload('dorm-1');
+      expect(payload).toContain('dcs://manager-link?');
+      expect(payload).toContain('dormId=dorm-1');
+      expect(payload).toContain('joinCode=CODE12');
+    });
+
+    it('parses a valid manager-dorm QR payload', () => {
+      const parsed = parseManagerDormLinkPayload(
+        'dcs://manager-link?dormId=dorm-1&joinCode=abc123',
+      );
+      expect(parsed).toEqual({ dormId: 'dorm-1', joinCode: 'ABC123' });
+    });
+
+    it('links dorm to manager from QR payload', async () => {
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'dorm-1', join_code: 'CODE12' }, error: null });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'dorm-1', name: 'Maple', join_code: 'CODE12', created_by: 'mgr-1' },
+        error: null,
+      });
+
+      const linked = await linkDormToManagerByQr(
+        'mgr-1',
+        'dcs://manager-link?dormId=dorm-1&joinCode=CODE12',
+      );
+
+      expect(linked.id).toBe('dorm-1');
+      expect(mockSupabase.update).toHaveBeenCalledWith({ created_by: 'mgr-1' });
+    });
+
+    it('links dorm to manager from manual join code', async () => {
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({
+          data: { id: 'dorm-1', name: 'Maple', join_code: 'CODE12', created_by: 'mgr-1' },
+          error: null,
+        });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [{ id: 'dorm-1' }], error: null });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'dorm-1', name: 'Maple', join_code: 'CODE12', created_by: 'mgr-1' },
+        error: null,
+      });
+
+      const linked = await linkDormToManagerByJoinCode('mgr-1', 'code12');
+
+      expect(linked.id).toBe('dorm-1');
+      expect(mockSupabase.update).toHaveBeenCalledWith({ created_by: 'mgr-1' });
+    });
+
+    it('builds and parses complex manager connect code', async () => {
+      mockSupabase.single.mockResolvedValueOnce({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          join_code: 'CODE12',
+        },
+        error: null,
+      });
+
+      const code = await createManagerDormManualCode('dorm-1');
+      expect(code.startsWith('DCSM-CODE12-')).toBe(true);
+
+      const parsed = parseManagerDormManualCode(code);
+      expect(parsed).toEqual({
+        dormId: '123e4567-e89b-12d3-a456-426614174000',
+        joinCode: 'CODE12',
+      });
+    });
+
+    it('links dorm to manager from complex manager connect code', async () => {
+      mockSupabase.single.mockResolvedValueOnce({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          join_code: 'CODE12',
+        },
+        error: null,
+      });
+
+      const code = await createManagerDormManualCode('dorm-1');
+
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({
+          data: { id: '123e4567-e89b-12d3-a456-426614174000', join_code: 'CODE12' },
+          error: null,
+        });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({
+        data: {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Maple',
+          join_code: 'CODE12',
+          created_by: 'mgr-1',
+        },
+        error: null,
+      });
+
+      const linked = await linkDormToManagerByManualCode('mgr-1', code);
+      expect(linked.id).toBe('123e4567-e89b-12d3-a456-426614174000');
+    });
+
+    it('throws for invalid manual join code', async () => {
+      mockSupabase.single.mockResolvedValueOnce({ data: { is_manager: true }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [], error: null });
+
+      await expect(linkDormToManagerByJoinCode('mgr-1', 'BAD123')).rejects.toThrow(
+        'Invalid join code or dorm not found',
+      );
+    });
+
+    it('throws when a join code maps to multiple dorms', async () => {
+      mockSupabase.single.mockResolvedValueOnce({ data: { is_manager: true }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({
+        data: [{ id: 'dorm-1' }, { id: 'dorm-2' }],
+        error: null,
+      });
+
+      await expect(linkDormToManagerByJoinCode('mgr-1', 'CODE12')).rejects.toThrow(
+        'This join code matches multiple dorms. Please use the manager connect code.',
+      );
+    });
+
+    it('throws a clear error when manager link update returns no rows', async () => {
+      mockSupabase.single.mockResolvedValueOnce({ data: { is_manager: true }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [{ id: 'dorm-1' }], error: null });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
+      await expect(linkDormToManagerByJoinCode('mgr-1', 'CODE12')).rejects.toThrow(
+        'Unable to link this dorm right now. Verify your database update policy for manager linking.',
+      );
+    });
+  });
+
+  describe('getDormStats', () => {
+    it('returns stats for a dorm with data', async () => {
+      mockSupabase.match
+        .mockResolvedValueOnce({ count: 10, error: null })
+        .mockResolvedValueOnce({ count: 7, error: null })
+        .mockReturnValueOnce(mockSupabase)
+        .mockResolvedValueOnce({ count: 4, error: null });
+      mockSupabase.in.mockResolvedValueOnce({ count: 2, error: null });
+
+      const stats = await getDormStats('dorm-1');
+      expect(stats.choreCompletionRate).toBe(70);
+      expect(stats.openRepairs).toBe(2);
+      expect(stats.memberCount).toBe(4);
+    });
+
+    it('returns zeroed stats for an empty dorm', async () => {
+      mockSupabase.match
+        .mockResolvedValueOnce({ count: 0, error: null })
+        .mockResolvedValueOnce({ count: 0, error: null })
+        .mockReturnValueOnce(mockSupabase)
+        .mockResolvedValueOnce({ count: 0, error: null });
+      mockSupabase.in.mockResolvedValueOnce({ count: 0, error: null });
+
+      const stats = await getDormStats('dorm-empty');
+      expect(stats).toEqual({
+        choreCompletionRate: 0,
+        openRepairs: 0,
+        memberCount: 0,
+        totalChores: 0,
+        completedChores: 0,
+      });
+    });
+
+    it('throws for invalid dormId', async () => {
+      await expect(getDormStats('')).rejects.toThrow('Dorm ID is required');
+    });
+  });
+
+  describe('getManagerOverview', () => {
+    it('returns aggregated stats for manager with multiple dorms', async () => {
+      mockSupabase.order.mockResolvedValueOnce({
+        data: [
+          { id: 'dorm-1', created_by: 'mgr-1' },
+          { id: 'dorm-2', created_by: 'mgr-1' },
+        ],
+        error: null,
+      });
+
+      mockSupabase.match
+        .mockResolvedValueOnce({ count: 10, error: null })
+        .mockResolvedValueOnce({ count: 6, error: null })
+        .mockReturnValueOnce(mockSupabase)
+        .mockResolvedValueOnce({ count: 4, error: null })
+        .mockResolvedValueOnce({ count: 5, error: null })
+        .mockResolvedValueOnce({ count: 5, error: null })
+        .mockReturnValueOnce(mockSupabase)
+        .mockResolvedValueOnce({ count: 3, error: null });
+
+      mockSupabase.in
+        .mockResolvedValueOnce({ count: 3, error: null })
+        .mockResolvedValueOnce({ count: 1, error: null });
+
+      const overview = await getManagerOverview('mgr-1');
+      expect(overview).toEqual({
+        dormCount: 2,
+        choreCompletionRate: 73,
+        openRepairs: 4,
+        memberCount: 7,
+      });
+    });
+
+    it('returns zeroed stats for manager with no dorms', async () => {
+      mockSupabase.order.mockResolvedValueOnce({ data: [], error: null });
+
+      const overview = await getManagerOverview('mgr-no-dorms');
+      expect(overview).toEqual({
+        dormCount: 0,
+        choreCompletionRate: 0,
+        openRepairs: 0,
+        memberCount: 0,
+      });
     });
   });
 });

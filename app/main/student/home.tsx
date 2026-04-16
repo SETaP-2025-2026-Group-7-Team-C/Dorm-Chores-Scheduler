@@ -31,6 +31,7 @@ import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
 import { getChores } from '../../../lib/chores';
 import { getActiveDormId } from '../../../lib/dorms';
+import { getRepairRequestsByReporter } from '../../../lib/repairs';
 import { supabase } from '../../../lib/supabase';
 
 const NAV_ITEMS: NavBarItem[] = [
@@ -66,17 +67,17 @@ dayjs.extend(relativeTime);
 
 type IconName = keyof typeof FontAwesome5.glyphMap;
 
-const OPEN_REPAIRS: {
+type RepairSummary = {
   id: string;
   title: string;
   subtitle: string;
   iconName: IconName;
-  status?: {
+  status: {
     label: string;
     backgroundColor: string;
     textColor: string;
   };
-}[] = [];
+};
 
 export type TaskSummary = {
   id: string;
@@ -96,6 +97,7 @@ export default function Home() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [todayTasks, setTodayTasks] = useState<TaskSummary[]>([]);
+  const [openRepairs, setOpenRepairs] = useState<RepairSummary[]>([]);
   const [weekStats, setWeekStats] = useState<WeekChoreStats>({
     total: 0,
     completedRate: 0,
@@ -109,6 +111,50 @@ export default function Home() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const toSentenceCase = (value: string, fallback: string) => {
+    const normalized = String(value || '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return fallback;
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  const getRepairStatusChip = (status: string) => {
+    const normalized = String(status || 'pending').toLowerCase();
+
+    if (normalized === 'in_progress') {
+      return {
+        label: 'In progress',
+        backgroundColor: COLOURS.warning.background,
+        textColor: COLOURS.warning.text,
+      };
+    }
+
+    if (normalized === 'completed' || normalized === 'resolved') {
+      return {
+        label: 'Resolved',
+        backgroundColor: COLOURS.success.background,
+        textColor: COLOURS.success.text,
+      };
+    }
+
+    if (normalized === 'rejected') {
+      return {
+        label: 'Rejected',
+        backgroundColor: COLOURS.error.background,
+        textColor: COLOURS.error.text,
+      };
+    }
+
+    return {
+      label: 'Pending',
+      backgroundColor: COLOURS.info.background,
+      textColor: COLOURS.info.text,
+    };
+  };
 
   const loadTasks = async () => {
     setIsLoading(true);
@@ -150,6 +196,33 @@ export default function Home() {
         overdue: overdueThisWeek,
       });
 
+      if (currentUserId) {
+        const repairs = (await getRepairRequestsByReporter(currentUserId)) || [];
+        const openRepairsForDorm = repairs
+          .filter(
+            (r: any) =>
+              r.dorm_id === activeDormId && String(r.status || '').toLowerCase() !== 'completed',
+          )
+          .slice(0, 3)
+          .map((r: any) => {
+            const createdAt = r.created_at ? dayjs(r.created_at) : null;
+            const createdAtText = createdAt ? createdAt.fromNow() : 'recently';
+            const locationLabel = toSentenceCase(String(r.location || ''), 'Unknown location');
+
+            return {
+              id: r.id,
+              title: r.title || 'Untitled repair request',
+              subtitle: `${locationLabel} - Reported ${createdAtText}`,
+              iconName: 'wrench' as IconName,
+              status: getRepairStatusChip(String(r.status || 'pending')),
+            };
+          });
+
+        setOpenRepairs(openRepairsForDorm);
+      } else {
+        setOpenRepairs([]);
+      }
+
       const mappedData = data
         .filter((c) => c.status !== 'completed')
         .map((c) => {
@@ -172,6 +245,7 @@ export default function Home() {
       setTodayTasks(mappedData);
     } catch (error) {
       console.warn('Failed to load tasks', error);
+      setOpenRepairs([]);
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +301,7 @@ export default function Home() {
   }));
 
   const noChores = todayTasks.length === 0;
-  const noRepairs = OPEN_REPAIRS.length === 0;
+  const noRepairs = openRepairs.length === 0;
 
   return (
     <View style={styles.container}>
@@ -352,7 +426,7 @@ export default function Home() {
               <InfoPanel label="Total chores" value={String(weekStats.total)} />
               <InfoPanel label="Completed" value={`${weekStats.completedRate}%`} />
               <InfoPanel label="Overdue" value={String(weekStats.overdue)} />
-              <InfoPanel label="Open repairs" value="--" />
+              <InfoPanel label="Open repairs" value={String(openRepairs.length)} />
             </View>
 
             <Spacer size="large" />
@@ -381,16 +455,16 @@ export default function Home() {
               </View>
             ) : (
               <View>
-                {OPEN_REPAIRS.map((repair, index) => (
+                {openRepairs.map((repair, index) => (
                   <View key={repair.id}>
                     <ListItem
                       title={repair.title}
                       subtitle={repair.subtitle}
                       iconName={repair.iconName}
-                      onPress={() => router.push(`/main/student/view-repair`)}
+                      onPress={() => router.push(`/main/student/view-repair?id=${repair.id}`)}
                       statusChip={repair.status}
                     />
-                    {index < OPEN_REPAIRS.length - 1 ? <Spacer size="small" /> : null}
+                    {index < openRepairs.length - 1 ? <Spacer size="small" /> : null}
                   </View>
                 ))}
               </View>
