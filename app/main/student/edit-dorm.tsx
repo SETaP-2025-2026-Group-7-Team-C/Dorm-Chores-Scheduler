@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 
+import { FontAwesome5 } from '@expo/vector-icons';
 import Button from '../../../components/Button';
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
@@ -32,14 +33,23 @@ import {
   leaveDorm,
   updateDorm,
 } from '../../../lib/dorms';
+import { supabase } from '../../../lib/supabase';
 
 const GRADIENT_THRESHOLD = 24;
+
+type DormMemberView = {
+  id: string;
+  name: string;
+  isHost: boolean;
+  availability: 'available' | 'unavailable' | 'unknown';
+};
 
 export default function EditDorm() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [dorm, setDorm] = useState<Dorm | null>(null);
   const [isCreator, setIsCreator] = useState(false);
+  const [members, setMembers] = useState<DormMemberView[]>([]);
 
   const [name, setName] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -66,6 +76,37 @@ export default function EditDorm() {
         } else {
           setIsCreator(false);
         }
+
+        const { data: memberRows, error: membersError } = await supabase
+          .from('dorm_members')
+          .select('user_id, profiles (display_name, availability_status)')
+          .eq('dorm_id', id)
+          .order('joined_at', { ascending: true });
+
+        if (membersError) {
+          throw membersError;
+        }
+
+        const mappedMembers: DormMemberView[] = (memberRows || []).map((row: any) => {
+          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+          const availability =
+            profile?.availability_status === 'available' ||
+            profile?.availability_status === 'unavailable'
+              ? profile.availability_status
+              : 'unknown';
+
+          return {
+            id: row.user_id,
+            name:
+              user?.id === row.user_id
+                ? 'You'
+                : String(profile?.display_name || '').trim() || 'Unknown member',
+            isHost: row.user_id === dormData.created_by,
+            availability,
+          };
+        });
+
+        setMembers(mappedMembers);
       }
     } catch (e: any) {
       setNotice({ type: 'error', text: e.message || 'Failed to load dorm' });
@@ -232,6 +273,13 @@ export default function EditDorm() {
               editable={isCreator}
             />
 
+            {isCreator && (
+              <>
+                <Spacer size="medium" />
+                <Button title="Save changes" onPress={handleSave} variant="standard" />
+              </>
+            )}
+
             <Spacer size="large" />
 
             {dorm && (
@@ -247,14 +295,78 @@ export default function EditDorm() {
               </>
             )}
 
-            {isCreator && <Button title="Save changes" onPress={handleSave} variant="standard" />}
+            <Text style={styles.inputLabel}>Members</Text>
+            <View style={styles.membersList}>
+              {members.length === 0 ? (
+                <Text style={styles.memberEmptyText}>No members found</Text>
+              ) : (
+                members.map((member) => (
+                  <View key={member.id} style={styles.memberRow}>
+                    <View style={styles.memberLeft}>
+                      <View style={styles.memberIconCircle}>
+                        <FontAwesome5 name="user" size={13} color={COLOURS.black} />
+                      </View>
+                      <Text style={styles.memberName}>{member.name}</Text>
+                    </View>
+                    <View style={styles.memberRight}>
+                      {member.isHost ? (
+                        <View style={[styles.memberChip, styles.hostChip]}>
+                          <Text style={[styles.memberChipText, styles.hostChipText]}>Host</Text>
+                        </View>
+                      ) : null}
+                      <View
+                        style={[
+                          styles.memberChip,
+                          member.availability === 'available'
+                            ? styles.availableChip
+                            : member.availability === 'unavailable'
+                              ? styles.unavailableChip
+                              : styles.unknownChip,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.memberChipText,
+                            member.availability === 'available'
+                              ? styles.availableChipText
+                              : member.availability === 'unavailable'
+                                ? styles.unavailableChipText
+                                : styles.unknownChipText,
+                          ]}
+                        >
+                          {member.availability === 'available'
+                            ? 'Available'
+                            : member.availability === 'unavailable'
+                              ? 'Unavailable'
+                              : 'Unknown'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            <Spacer size="medium" />
 
             {notice && (
               <>
-                <Spacer size="medium" />
                 <InlineNotification type={notice.type} text={notice.text} />
+                <Spacer size="medium" />
               </>
             )}
+
+            <Spacer size="large" />
+
+            {/* AUDIT LOG LINK ADDED HERE */}
+            <Text style={styles.inputLabel}>Audit Log</Text>
+            <Text style={styles.subheading}>View recent history and actions in this dorm.</Text>
+            <Spacer size="medium" />
+            <Button
+              title="View Dorm Audits"
+              onPress={() => router.push('/main/student/audit-logs')}
+              variant="standard"
+            />
 
             <Spacer size="large" />
 
@@ -406,6 +518,89 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLOURS.black,
     letterSpacing: 1,
+  },
+  membersList: {
+    borderWidth: 1,
+    borderColor: COLOURS.gray[200],
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLOURS.white,
+  },
+  memberRow: {
+    minHeight: 52,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: COLOURS.gray[200],
+  },
+  memberLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    marginRight: 8,
+  },
+  memberIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLOURS.gray[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  memberName: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: COLOURS.black,
+  },
+  memberRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  memberChip: {
+    minHeight: 22,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    justifyContent: 'center',
+  },
+  memberChipText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 10,
+  },
+  hostChip: {
+    backgroundColor: COLOURS.gray[100],
+  },
+  hostChipText: {
+    color: COLOURS.black,
+  },
+  availableChip: {
+    backgroundColor: COLOURS.success.background,
+  },
+  availableChipText: {
+    color: COLOURS.success.text,
+  },
+  unavailableChip: {
+    backgroundColor: COLOURS.error.background,
+  },
+  unavailableChipText: {
+    color: COLOURS.error.text,
+  },
+  unknownChip: {
+    backgroundColor: COLOURS.info.background,
+  },
+  unknownChipText: {
+    color: COLOURS.info.text,
+  },
+  memberEmptyText: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: COLOURS.gray[500],
+    paddingHorizontal: 12,
+    paddingVertical: 14,
   },
   centerText: {
     fontFamily: 'Inter',

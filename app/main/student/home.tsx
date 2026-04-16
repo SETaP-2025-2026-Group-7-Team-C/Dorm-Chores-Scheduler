@@ -29,8 +29,12 @@ import NavBar, { NavBarItem } from '../../../components/Navbar';
 import ProfilePicture from '../../../components/ProfilePicture';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getUserCompletionHistory, getWeeklyChoreSummary } from '../../../lib/analytics';
 import { getChores } from '../../../lib/chores';
 import { getActiveDormId } from '../../../lib/dorms';
+import { runDailyChoreRemindersForDorm } from '../../../lib/reminders';
+import { getRepairRequestsByReporter } from '../../../lib/repairs';
+import { generateWeeklyAssignments } from '../../../lib/scheduler';
 import { supabase } from '../../../lib/supabase';
 
 const NAV_ITEMS: NavBarItem[] = [
@@ -66,17 +70,17 @@ dayjs.extend(relativeTime);
 
 type IconName = keyof typeof FontAwesome5.glyphMap;
 
-const OPEN_REPAIRS: {
+type RepairSummary = {
   id: string;
   title: string;
   subtitle: string;
   iconName: IconName;
-  status?: {
+  status: {
     label: string;
     backgroundColor: string;
     textColor: string;
   };
-}[] = [];
+};
 
 export type TaskSummary = {
   id: string;
@@ -96,11 +100,15 @@ export default function Home() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [todayTasks, setTodayTasks] = useState<TaskSummary[]>([]);
+  const [openRepairs, setOpenRepairs] = useState<RepairSummary[]>([]);
   const [weekStats, setWeekStats] = useState<WeekChoreStats>({
     total: 0,
     completedRate: 0,
     overdue: 0,
   });
+  const [topPerformer, setTopPerformer] = useState<{ name: string; completed: number } | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   const [contentOverflows, setContentOverflows] = useState(false);
@@ -109,6 +117,50 @@ export default function Home() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const toSentenceCase = (value: string, fallback: string) => {
+    const normalized = String(value || '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return fallback;
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  const getRepairStatusChip = (status: string) => {
+    const normalized = String(status || 'pending').toLowerCase();
+
+    if (normalized === 'in_progress') {
+      return {
+        label: 'In progress',
+        backgroundColor: COLOURS.warning.background,
+        textColor: COLOURS.warning.text,
+      };
+    }
+
+    if (normalized === 'completed' || normalized === 'resolved') {
+      return {
+        label: 'Resolved',
+        backgroundColor: COLOURS.success.background,
+        textColor: COLOURS.success.text,
+      };
+    }
+
+    if (normalized === 'rejected') {
+      return {
+        label: 'Rejected',
+        backgroundColor: COLOURS.error.background,
+        textColor: COLOURS.error.text,
+      };
+    }
+
+    return {
+      label: 'Pending',
+      backgroundColor: COLOURS.info.background,
+      textColor: COLOURS.info.text,
+    };
+  };
 
   const loadTasks = async () => {
     setIsLoading(true);
@@ -125,30 +177,59 @@ export default function Home() {
         return;
       }
 
+      if (currentUserId) {
+        await generateWeeklyAssignments(activeDormId, currentUserId).catch((error) =>
+          console.warn('Weekly scheduler run failed', error),
+        );
+        await runDailyChoreRemindersForDorm(activeDormId).catch((error) =>
+          console.warn('Daily reminder run failed', error),
+        );
+      }
+
       const data = await getChores(activeDormId);
-      const startOfWeek = dayjs().startOf('week');
-      const endOfWeek = dayjs().endOf('week');
-
-      const choresThisWeek = data.filter((c) => {
-        const createdAt = dayjs(c.created_at);
-        return !createdAt.isBefore(startOfWeek) && !createdAt.isAfter(endOfWeek);
-      });
-
-      const completedThisWeek = choresThisWeek.filter((c) => c.status === 'completed').length;
-      const overdueThisWeek = choresThisWeek.filter((c) => {
-        if (c.status === 'completed') return false;
-        const dueDate = dayjs(c.created_at).add(c.meta?.due_in_days || 7, 'day');
-        return dueDate.isBefore(dayjs());
-      }).length;
-
+      const weeklySummary = await getWeeklyChoreSummary(activeDormId);
       setWeekStats({
-        total: choresThisWeek.length,
-        completedRate:
-          choresThisWeek.length > 0
-            ? Math.round((completedThisWeek / choresThisWeek.length) * 100)
-            : 0,
-        overdue: overdueThisWeek,
+        total: weeklySummary.total,
+        completedRate: weeklySummary.completionRate,
+        overdue: weeklySummary.pending,
       });
+      const completionHistory = await getUserCompletionHistory(activeDormId);
+      const best = completionHistory[0];
+      setTopPerformer(
+        best
+          ? {
+              name: best.displayName || 'Dorm member',
+              completed: best.completedCount,
+            }
+          : null,
+      );
+
+      if (currentUserId) {
+        const repairs = (await getRepairRequestsByReporter(currentUserId)) || [];
+        const openRepairsForDorm = repairs
+          .filter(
+            (r: any) =>
+              r.dorm_id === activeDormId && String(r.status || '').toLowerCase() !== 'completed',
+          )
+          .slice(0, 3)
+          .map((r: any) => {
+            const createdAt = r.created_at ? dayjs(r.created_at) : null;
+            const createdAtText = createdAt ? createdAt.fromNow() : 'recently';
+            const locationLabel = toSentenceCase(String(r.location || ''), 'Unknown location');
+
+            return {
+              id: r.id,
+              title: r.title || 'Untitled repair request',
+              subtitle: `${locationLabel} - Reported ${createdAtText}`,
+              iconName: 'wrench' as IconName,
+              status: getRepairStatusChip(String(r.status || 'pending')),
+            };
+          });
+
+        setOpenRepairs(openRepairsForDorm);
+      } else {
+        setOpenRepairs([]);
+      }
 
       const mappedData = data
         .filter((c) => c.status !== 'completed')
@@ -172,6 +253,7 @@ export default function Home() {
       setTodayTasks(mappedData);
     } catch (error) {
       console.warn('Failed to load tasks', error);
+      setOpenRepairs([]);
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +309,7 @@ export default function Home() {
   }));
 
   const noChores = todayTasks.length === 0;
-  const noRepairs = OPEN_REPAIRS.length === 0;
+  const noRepairs = openRepairs.length === 0;
 
   return (
     <View style={styles.container}>
@@ -352,8 +434,18 @@ export default function Home() {
               <InfoPanel label="Total chores" value={String(weekStats.total)} />
               <InfoPanel label="Completed" value={`${weekStats.completedRate}%`} />
               <InfoPanel label="Overdue" value={String(weekStats.overdue)} />
-              <InfoPanel label="Open repairs" value="--" />
+              <InfoPanel label="Open repairs" value={String(openRepairs.length)} />
             </View>
+            {topPerformer ? (
+              <>
+                <Spacer size="small" />
+                <InlineNotification
+                  type="tip"
+                  text={`Top completion record: ${topPerformer.name} (${topPerformer.completed} completed)`}
+                  style={styles.inlineNotification}
+                />
+              </>
+            ) : null}
 
             <Spacer size="large" />
 
@@ -381,16 +473,16 @@ export default function Home() {
               </View>
             ) : (
               <View>
-                {OPEN_REPAIRS.map((repair, index) => (
+                {openRepairs.map((repair, index) => (
                   <View key={repair.id}>
                     <ListItem
                       title={repair.title}
                       subtitle={repair.subtitle}
                       iconName={repair.iconName}
-                      onPress={() => router.push(`/main/student/view-repair`)}
+                      onPress={() => router.push(`/main/student/view-repair?id=${repair.id}`)}
                       statusChip={repair.status}
                     />
-                    {index < OPEN_REPAIRS.length - 1 ? <Spacer size="small" /> : null}
+                    {index < openRepairs.length - 1 ? <Spacer size="small" /> : null}
                   </View>
                 ))}
               </View>
@@ -417,6 +509,34 @@ export default function Home() {
                 title="Request Repair"
                 iconName="wrench"
                 onPress={() => router.push('/main/student/request-repair')}
+              />
+            </View>
+            <Spacer size="small" />
+            <View style={styles.quickActionsRow}>
+              <BlockButton
+                title="Templates"
+                iconName="copy"
+                onPress={() => router.push('/main/student/chore-templates')}
+              />
+              <BlockButton
+                title="Opt-Outs"
+                iconName="user-times"
+                onPress={() => router.push('/main/student/chore-opt-outs')}
+              />
+            </View>
+
+            <Spacer size="small" />
+            <View style={styles.quickActionsRow}>
+              <BlockButton
+                title="Analytics"
+                iconName="chart-bar"
+                onPress={() => router.push('/main/student/chore-analytics')}
+              />
+              {/* AUDIT LOGS BUTTON ADDED HERE */}
+              <BlockButton
+                title="Audit Logs"
+                iconName="history"
+                onPress={() => router.push('/main/student/audit-logs')}
               />
             </View>
 

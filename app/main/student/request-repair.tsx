@@ -24,6 +24,9 @@ import InlineNotification from '../../../components/InlineNotification';
 import Input from '../../../components/Input';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getActiveDormId } from '../../../lib/dorms';
+import { createRepairRequest } from '../../../lib/repairs';
+import { supabase } from '../../../lib/supabase';
 
 const GRADIENT_THRESHOLD = 24;
 
@@ -79,11 +82,15 @@ export default function RequestRepair() {
     headerGradientOpacity.setValue(headerValue);
   };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     setNotice(null);
 
     if (!title.trim()) {
       setNotice({ type: 'error', text: 'Please enter a title for the repair' });
+      return;
+    }
+    if (!description.trim()) {
+      setNotice({ type: 'error', text: 'Please enter a description for the repair' });
       return;
     }
     if (!selectedCategory) {
@@ -95,9 +102,33 @@ export default function RequestRepair() {
       return;
     }
 
-    // TODO: submit repair request to API
-    router.push('/main/student/repairs');
-  }, [title, selectedCategory, selectedPriority]);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('Not logged in');
+      }
+
+      const activeDormId = await getActiveDormId();
+      if (!activeDormId) {
+        throw new Error('Could not find which dorm you belong to.');
+      }
+
+      const urgency = selectedPriority as 'low' | 'medium' | 'high';
+      await createRepairRequest(activeDormId, user.id, {
+        title,
+        description,
+        location: selectedCategory,
+        urgency,
+      });
+
+      router.push('/main/student/repairs');
+    } catch (e: any) {
+      setNotice({ type: 'error', text: e?.message || 'Failed to submit repair request' });
+    }
+  }, [title, description, selectedCategory, selectedPriority]);
 
   return (
     <View style={styles.container}>
@@ -151,9 +182,7 @@ export default function RequestRepair() {
 
             <Spacer size="medium" />
 
-            <Text style={styles.inputLabel}>
-              Description <Text style={styles.optional}>(optional)</Text>
-            </Text>
+            <Text style={styles.inputLabel}>Description</Text>
             <Input
               value={description}
               onChangeText={setDescription}
@@ -265,11 +294,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLOURS.black,
     marginBottom: 8,
-  },
-  optional: {
-    fontFamily: 'Inter',
-    fontWeight: 'normal',
-    color: COLOURS.gray[500],
   },
   chipRow: {
     flexDirection: 'row',

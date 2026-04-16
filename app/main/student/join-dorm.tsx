@@ -12,9 +12,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
+import { FontAwesome5 } from '@expo/vector-icons';
 import Button from '../../../components/Button';
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
@@ -36,6 +38,7 @@ type DormPreview = {
 
 export default function JoinDorm() {
   const [inviteCode, setInviteCode] = useState('');
+  const [isCodeDropdownOpen, setIsCodeDropdownOpen] = useState(false);
   const [dormPreview, setDormPreview] = useState<DormPreview | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -183,27 +186,48 @@ export default function JoinDorm() {
 
             <Spacer size="large" />
 
-            <Text style={styles.inputLabel}>Invite code</Text>
-            <Input
-              value={inviteCode}
-              onChangeText={(text) => {
-                setInviteCode(text.toUpperCase());
-                setDormPreview(null);
-                setNotice(null);
-              }}
-              placeholder="e.g. MAPLE-4X9Z"
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity
+                style={styles.dropdownHeader}
+                onPress={() => setIsCodeDropdownOpen((prev) => !prev)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.dropdownHeaderText}>Enter invite code</Text>
+                <FontAwesome5
+                  name={isCodeDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={COLOURS.black}
+                />
+              </TouchableOpacity>
 
-            <Spacer size="large" />
+              {isCodeDropdownOpen ? (
+                <View style={styles.dropdownContent}>
+                  <Text style={styles.inputLabel}>Invite code</Text>
+                  <Input
+                    value={inviteCode}
+                    onChangeText={(text) => {
+                      setInviteCode(text.toUpperCase());
+                      setDormPreview(null);
+                      setNotice(null);
+                    }}
+                    placeholder="e.g. AB12CD"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
 
-            <Button
-              title={isLookingUp ? 'Looking up...' : 'Look up dorm'}
-              onPress={handleLookUp}
-              variant="secondary"
-              disabled={isLookingUp}
-            />
+                  <Spacer size="large" />
+
+                  <Button
+                    title={isLookingUp ? 'Looking up...' : 'Look up dorm'}
+                    onPress={handleLookUp}
+                    variant="secondary"
+                    disabled={isLookingUp}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.dropdownHint}>Closed by default for a cleaner view</Text>
+              )}
+            </View>
 
             {dormPreview && (
               <>
@@ -295,6 +319,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLOURS.black,
     marginBottom: 8,
+  },
+  dropdownContainer: {
+    borderWidth: 1,
+    borderColor: COLOURS.gray[200],
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLOURS.white,
+  },
+  dropdownHeader: {
+    minHeight: 52,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownHeaderText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 14,
+    color: COLOURS.black,
+  },
+  dropdownContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.gray[200],
+  },
+  dropdownHint: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLOURS.gray[500],
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
   previewCard: {
     borderWidth: 1,

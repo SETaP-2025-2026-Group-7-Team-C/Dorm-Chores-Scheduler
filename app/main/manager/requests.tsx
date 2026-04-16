@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Keyboard,
@@ -14,8 +15,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { getRepairRequests } from '../../../lib/repairs';
-import { getActiveDormId } from '../../../lib/dorms';
 
 import { FontAwesome5 } from '@expo/vector-icons';
 import AvailabilityBadge from '../../../components/AvailabilityBadge';
@@ -26,8 +25,11 @@ import ProfilePicture from '../../../components/ProfilePicture';
 import SortDropdown from '../../../components/SortDropdown';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
+import { getCurrentUser } from '../../../lib/auth';
+import { getDormsByManager } from '../../../lib/dorms';
+import { getRepairRequests } from '../../../lib/repairs';
 
-const FILTER_OPTIONS = ['All', 'Important', 'In Progress', 'Pending'];
+const FILTER_OPTIONS = ['All', 'Important', 'In Progress', 'Pending', 'Completed'];
 const SORT_OPTIONS = ['Date Reported', 'Dorm', 'Priority'];
 
 const NAV_ITEMS: NavBarItem[] = [
@@ -65,55 +67,9 @@ type RepairRequest = {
   subtitle: string;
   iconName: IconName;
   status: RepairStatus;
+  workflowStatus: string;
+  urgency: string;
 };
-
-// Mock data combining priority and recent repairs
-const ALL_REPAIRS: RepairRequest[] = [
-  {
-    id: '1',
-    title: 'Broken bathroom light',
-    subtitle: 'Maple House - Reported by Person 1 - 20/03/2026',
-    iconName: 'lightbulb',
-    status: {
-      label: 'High',
-      backgroundColor: COLOURS.error.background,
-      textColor: COLOURS.error.text,
-    },
-  },
-  {
-    id: '2',
-    title: 'Leaking kitchen tap',
-    subtitle: 'Oak Lodge - Reported by Person 2 - 18/03/2026',
-    iconName: 'faucet',
-    status: {
-      label: 'In progress',
-      backgroundColor: COLOURS.warning.background,
-      textColor: COLOURS.warning.text,
-    },
-  },
-  {
-    id: '3',
-    title: 'Broken door hinge',
-    subtitle: 'Maple House - Reported by Person 3 - 15/03/2026',
-    iconName: 'door-open',
-    status: {
-      label: 'Pending',
-      backgroundColor: COLOURS.info.background,
-      textColor: COLOURS.info.text,
-    },
-  },
-  {
-    id: '4',
-    title: 'Fix broken sink',
-    subtitle: 'Oak Lodge - Reported by Person 4 - 14/03/2026',
-    iconName: 'faucet',
-    status: {
-      label: 'In progress',
-      backgroundColor: COLOURS.warning.background,
-      textColor: COLOURS.warning.text,
-    },
-  },
-];
 
 const GRADIENT_THRESHOLD = 24;
 
@@ -122,6 +78,8 @@ export default function Requests() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
   const [sortBy, setSortBy] = useState('Date Reported');
+  const [isLoading, setIsLoading] = useState(true);
+  const [allRepairs, setAllRepairs] = useState<RepairRequest[]>([]);
 
   const [contentOverflows, setContentOverflows] = useState(false);
   const scrollViewHeight = useRef(0);
@@ -129,6 +87,79 @@ export default function Requests() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+
+  const loadManagerRepairs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        setAllRepairs([]);
+        return;
+      }
+
+      const dorms = await getDormsByManager(user.id);
+      const dormRequestPairs = await Promise.all(
+        dorms.map(async (dorm) => ({
+          dormName: dorm.name,
+          requests: await getRepairRequests(dorm.id),
+        })),
+      );
+
+      const mapped: RepairRequest[] = dormRequestPairs.flatMap(({ dormName, requests }) =>
+        (requests || []).map((request: any) => {
+          const date = request.created_at ? new Date(request.created_at) : null;
+          const dateStr = date
+            ? `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
+                .toString()
+                .padStart(2, '0')}/${date.getFullYear()}`
+            : 'Unknown date';
+
+          const urgency = String(request.urgency || 'low');
+          const workflowStatus = String(request.status || 'pending').toLowerCase();
+          const statusMap: Record<string, RepairStatus> = {
+            high: {
+              label: 'High',
+              backgroundColor: COLOURS.error.background,
+              textColor: COLOURS.error.text,
+            },
+            medium: {
+              label: 'Medium',
+              backgroundColor: COLOURS.warning.background,
+              textColor: COLOURS.warning.text,
+            },
+            low: {
+              label: 'Low',
+              backgroundColor: COLOURS.info.background,
+              textColor: COLOURS.info.text,
+            },
+          };
+
+          return {
+            id: request.id,
+            title: request.title || 'Untitled repair request',
+            subtitle: `${dormName} - Reported ${dateStr}`,
+            iconName: 'wrench',
+            status: statusMap[urgency] || statusMap.low,
+            workflowStatus,
+            urgency,
+          };
+        }),
+      );
+
+      setAllRepairs(mapped);
+    } catch (error) {
+      console.warn('Failed to load manager repair requests', error);
+      setAllRepairs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadManagerRepairs();
+    }, [loadManagerRepairs]),
+  );
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -170,7 +201,30 @@ export default function Requests() {
   };
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({ ...item }));
-  const isEmpty = ALL_REPAIRS.length === 0;
+
+  let displayRepairs = allRepairs;
+  if (activeFilter === 'Completed') {
+    displayRepairs = displayRepairs.filter(
+      (request) => request.workflowStatus === 'completed' || request.workflowStatus === 'resolved',
+    );
+  } else if (activeFilter === 'In Progress') {
+    displayRepairs = displayRepairs.filter((request) => request.workflowStatus === 'in_progress');
+  } else if (activeFilter === 'Pending') {
+    displayRepairs = displayRepairs.filter((request) => request.workflowStatus === 'pending');
+  } else if (activeFilter === 'Important') {
+    displayRepairs = displayRepairs.filter(
+      (request) =>
+        request.urgency === 'high' &&
+        request.workflowStatus !== 'completed' &&
+        request.workflowStatus !== 'resolved',
+    );
+  } else {
+    displayRepairs = displayRepairs.filter(
+      (request) => request.workflowStatus !== 'completed' && request.workflowStatus !== 'resolved',
+    );
+  }
+
+  const isEmpty = displayRepairs.length === 0;
 
   return (
     <View style={styles.container}>
@@ -220,19 +274,12 @@ export default function Requests() {
           <View style={styles.content}>
             <Text style={styles.title}>All Requests</Text>
 
-            {isEmpty ? (
-              <>
-                <Spacer size="large" />
-                <View style={styles.noneFound}>
-                  <View style={styles.iconWrapper}>
-                    <FontAwesome5 name="check-circle" size={40} color={COLOURS.black} />
-                  </View>
-                  <Text style={styles.noneFoundTitle}>All caught up</Text>
-                  <Text style={styles.noneFoundSubtitle}>
-                    There are currently no open repair requests across your managed dorms.
-                  </Text>
-                </View>
-              </>
+            {isLoading ? (
+              <View
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}
+              >
+                <ActivityIndicator size="large" color={COLOURS.black} />
+              </View>
             ) : (
               <>
                 <Spacer size="medium" />
@@ -256,18 +303,34 @@ export default function Requests() {
 
                 <Spacer size="medium" />
 
-                {ALL_REPAIRS.map((request, index) => (
-                  <View key={request.id}>
-                    <ListItem
-                      title={request.title}
-                      iconName={request.iconName}
-                      subtitle={request.subtitle}
-                      statusChip={request.status}
-                      onPress={() => router.push(`/main/manager/view-request`)}
-                    />
-                    {index < ALL_REPAIRS.length - 1 && <Spacer size="small" />}
+                {isEmpty ? (
+                  <View style={styles.noneFound}>
+                    <View style={styles.iconWrapper}>
+                      <FontAwesome5 name="check-circle" size={40} color={COLOURS.black} />
+                    </View>
+                    <Text style={styles.noneFoundTitle}>
+                      {activeFilter === 'Completed' ? 'No completed' : 'All caught up'}
+                    </Text>
+                    <Text style={styles.noneFoundSubtitle}>
+                      {activeFilter === 'Completed'
+                        ? 'There are no completed repair requests in this tab.'
+                        : 'There are currently no repair requests in this tab.'}
+                    </Text>
                   </View>
-                ))}
+                ) : (
+                  displayRepairs.map((request, index) => (
+                    <View key={request.id}>
+                      <ListItem
+                        title={request.title}
+                        iconName={request.iconName}
+                        subtitle={request.subtitle}
+                        statusChip={request.status}
+                        onPress={() => router.push(`/main/manager/view-request?id=${request.id}`)}
+                      />
+                      {index < displayRepairs.length - 1 && <Spacer size="small" />}
+                    </View>
+                  ))
+                )}
               </>
             )}
 

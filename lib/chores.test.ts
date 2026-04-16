@@ -26,6 +26,8 @@ describe('Chores System', () => {
       update: jest.fn().mockReturnThis(),
       delete: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       single: jest.fn().mockReturnThis(),
     };
@@ -74,7 +76,7 @@ describe('Chores System', () => {
       expect(chore.title).toBe('Clean');
     });
 
-    it('creates chore as unassigned when no eligible members are available', async () => {
+    it('creates chore as pending when no eligible members are available', async () => {
       mockSupabase.eq.mockResolvedValueOnce({ count: 0, error: null });
       mockSupabase.order.mockResolvedValueOnce({
         data: [{ user_id: 'user-1' }],
@@ -89,7 +91,7 @@ describe('Chores System', () => {
       await createChore('dorm-1', { title: 'Clean' });
 
       const insertedPayload = mockSupabase.insert.mock.calls[0][0][0];
-      expect(insertedPayload.status).toBe('unassigned');
+      expect(insertedPayload.status).toBe('pending');
       expect(insertedPayload.description).toContain('"assignedTo":null');
     });
 

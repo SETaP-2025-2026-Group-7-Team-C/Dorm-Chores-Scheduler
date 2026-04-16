@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -25,6 +25,7 @@ import Input from '../../../components/Input';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
 import { createChore } from '../../../lib/chores';
+import { getChoreTemplates } from '../../../lib/choreTemplates';
 import { getActiveDormId } from '../../../lib/dorms';
 import { supabase } from '../../../lib/supabase';
 
@@ -46,6 +47,58 @@ const FREQUENCY_OPTIONS: { key: string; label: string }[] = [
   { key: 'monthly', label: 'Monthly' },
 ];
 
+type ChorePreset = {
+  key: string;
+  label: string;
+  title: string;
+  description: string;
+  category: string;
+  dueWithinDays: string;
+};
+
+const DEFAULT_CHORE_PRESETS: ChorePreset[] = [
+  {
+    key: 'bins',
+    label: 'Take bins out',
+    title: 'Take out the bins',
+    description: 'Empty kitchen and bathroom bins and replace liners.',
+    category: 'bins',
+    dueWithinDays: '2',
+  },
+  {
+    key: 'kitchen',
+    label: 'Clean kitchen',
+    title: 'Clean kitchen surfaces',
+    description: 'Wipe counters and hob, clean sink, and tidy shared kitchen area.',
+    category: 'kitchen',
+    dueWithinDays: '3',
+  },
+  {
+    key: 'bathroom',
+    label: 'Clean bathroom',
+    title: 'Clean shared bathroom',
+    description: 'Clean sink, mirror, toilet, and shower area.',
+    category: 'bathroom',
+    dueWithinDays: '3',
+  },
+  {
+    key: 'floors',
+    label: 'Vacuum floors',
+    title: 'Vacuum shared floors',
+    description: 'Vacuum corridor and shared rooms.',
+    category: 'floors',
+    dueWithinDays: '7',
+  },
+  {
+    key: 'corridor',
+    label: 'Tidy corridor',
+    title: 'Tidy shared corridor',
+    description: 'Clear clutter and wipe surfaces in the corridor.',
+    category: 'corridor',
+    dueWithinDays: '7',
+  },
+];
+
 export default function CreateChore() {
   const [title, setTitle] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -54,6 +107,8 @@ export default function CreateChore() {
   const [dueWithinDays, setDueWithinDays] = useState('7');
   const [dueWithinError, setDueWithinError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(CATEGORIES[0].key);
+  const [selectedPresetKey, setSelectedPresetKey] = useState<string | null>(null);
+  const [quickStartPresets, setQuickStartPresets] = useState<ChorePreset[]>(DEFAULT_CHORE_PRESETS);
   const [isRecurring, setIsRecurring] = useState<boolean | null>(false);
   const [selectedFrequency, setSelectedFrequency] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -71,6 +126,42 @@ export default function CreateChore() {
     });
     return () => backHandler.remove();
   }, []);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const dormId = await getActiveDormId();
+      if (!dormId) {
+        setQuickStartPresets(DEFAULT_CHORE_PRESETS);
+        return;
+      }
+
+      const templates = await getChoreTemplates(dormId, false);
+      if (!templates.length) {
+        setQuickStartPresets(DEFAULT_CHORE_PRESETS);
+        return;
+      }
+
+      setQuickStartPresets(
+        templates.map((t) => ({
+          key: t.id,
+          label: t.title,
+          title: t.title,
+          description: t.description || '',
+          category: t.category || CATEGORIES[0].key,
+          dueWithinDays: String(t.default_due_in_days || 7),
+        })),
+      );
+    } catch (error) {
+      console.warn('Failed to load chore templates, using defaults', error);
+      setQuickStartPresets(DEFAULT_CHORE_PRESETS);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTemplates();
+    }, [loadTemplates]),
+  );
 
   useEffect(() => {
     const showListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
@@ -91,6 +182,18 @@ export default function CreateChore() {
   const handleRecurringToggle = (value: boolean) => {
     setIsRecurring(value);
     if (!value) setSelectedFrequency(null);
+  };
+
+  const applyPreset = (preset: ChorePreset) => {
+    setSelectedPresetKey(preset.key);
+    setTitle(preset.title);
+    setDescription(preset.description);
+    setSelectedCategory(preset.category);
+    setDueWithinDays(preset.dueWithinDays);
+    setTitleError(null);
+    setDescriptionError(null);
+    setDueWithinError(null);
+    setNotice(null);
   };
 
   const handleCreate = useCallback(async () => {
@@ -141,7 +244,7 @@ export default function CreateChore() {
       await createChore(activeDormId, {
         title: titleTrimmed,
         description: descriptionTrimmed,
-        status: 'assigned',
+        status: 'pending',
         meta: {
           category: selectedCategory,
           isRecurring: isRecurring || false,
@@ -193,6 +296,28 @@ export default function CreateChore() {
         >
           <View style={styles.content}>
             <Text style={styles.heading}>New Chore</Text>
+
+            <Spacer size="medium" />
+
+            <Text style={styles.inputLabel}>Quick start</Text>
+            <Text style={styles.manageText}>
+              Need to edit this list?{' '}
+              <InlineButton
+                title="Manage templates"
+                onPress={() => router.push('/main/student/chore-templates')}
+              />
+            </Text>
+            <Spacer size="small" />
+            <View style={styles.chipRow}>
+              {quickStartPresets.map((preset) => (
+                <FilterChip
+                  key={preset.key}
+                  label={preset.label}
+                  active={selectedPresetKey === preset.key}
+                  onPress={() => applyPreset(preset)}
+                />
+              ))}
+            </View>
 
             <Spacer size="medium" />
 
@@ -368,6 +493,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  manageText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: COLOURS.gray[700],
   },
   centerText: {
     fontFamily: 'Inter',

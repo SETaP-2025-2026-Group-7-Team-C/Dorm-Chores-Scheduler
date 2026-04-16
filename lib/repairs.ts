@@ -1,4 +1,6 @@
 import { formatErrorMessage } from './errors';
+import { createInAppNotification } from './notifications';
+import { logAuditEvent } from './audit';
 import { supabase } from './supabase';
 
 export interface RepairRequestData {
@@ -6,6 +8,32 @@ export interface RepairRequestData {
   description: string;
   location: string;
   urgency?: 'low' | 'medium' | 'high';
+}
+
+export interface RepairRequestUpdateData extends Partial<RepairRequestData> {
+  status?: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'resolved';
+  resolution_notes?: string;
+}
+
+export type RepairWorkflowStatus = 'pending' | 'in_progress' | 'resolved';
+
+function toDbRepairStatus(status: string): string {
+  return status === 'resolved' ? 'completed' : status;
+}
+
+async function notifySafely(
+  userId: string,
+  preferenceKey: Parameters<typeof createInAppNotification>[1],
+  title: string,
+  message: string,
+  type: string,
+): Promise<void> {
+  try {
+    await createInAppNotification(userId, preferenceKey, title, message, type);
+  } catch (error) {
+    // Notifications must never block core repair flows.
+    console.warn('Notification delivery failed', error);
+  }
 }
 
 /**
@@ -32,6 +60,10 @@ export async function createRepairRequest(
     throw new Error('Repair location is required');
   }
 
+  if (requestData.urgency && !['low', 'medium', 'high'].includes(requestData.urgency)) {
+    throw new Error('Repair urgency must be low, medium, or high');
+  }
+
   const { data, error } = await supabase
     .from('repair_requests')
     .insert([
@@ -51,26 +83,90 @@ export async function createRepairRequest(
     throw new Error(formatErrorMessage(error.message));
   }
 
+  // Notify manager that a new repair request was submitted.
+  const { data: dorm, error: dormError } = await supabase
+    .from('dorms')
+    .select('created_by')
+    .eq('id', dormId)
+    .single();
+
+  if (!dormError && dorm?.created_by && dorm.created_by !== userId) {
+    await notifySafely(
+      dorm.created_by,
+      'new_repair_request',
+      'New repair request',
+      `A new repair request "${requestData.title.trim()}" was submitted.`,
+      'repair',
+    );
+  }
+
+  await logAuditEvent({
+    actorId: userId,
+    dormId,
+    entityType: 'repair_request',
+    entityId: data.id,
+    action: 'create',
+    payload: {
+      title: data.title,
+      urgency: data.urgency,
+      status: data.status,
+    },
+  });
+
   return data;
 }
 
 /**
  * Update a repair request
  */
-export async function updateRepairRequest(
-  requestId: string,
-  updatedData: Partial<RepairRequestData> & {
-    status?: 'pending' | 'in_progress' | 'completed' | 'rejected';
-    resolution_notes?: string;
-  },
-) {
+export async function updateRepairRequest(requestId: string, updatedData: RepairRequestUpdateData) {
   if (!requestId) {
     throw new Error('Request ID is required');
   }
 
+  if (updatedData.title !== undefined && !updatedData.title.trim()) {
+    throw new Error('Repair title cannot be empty');
+  }
+
+  if (updatedData.description !== undefined && !updatedData.description.trim()) {
+    throw new Error('Repair description cannot be empty');
+  }
+
+  if (updatedData.location !== undefined && !updatedData.location.trim()) {
+    throw new Error('Repair location cannot be empty');
+  }
+
+  if (
+    updatedData.urgency !== undefined &&
+    !['low', 'medium', 'high'].includes(updatedData.urgency)
+  ) {
+    throw new Error('Repair urgency must be low, medium, or high');
+  }
+
+  if (
+    updatedData.status !== undefined &&
+    !['pending', 'in_progress', 'completed', 'rejected', 'resolved'].includes(updatedData.status)
+  ) {
+    throw new Error('Repair status is invalid');
+  }
+
+  const payload: RepairRequestUpdateData = {
+    ...updatedData,
+    ...(updatedData.title !== undefined ? { title: updatedData.title.trim() } : {}),
+    ...(updatedData.description !== undefined
+      ? { description: updatedData.description.trim() }
+      : {}),
+    ...(updatedData.location !== undefined ? { location: updatedData.location.trim() } : {}),
+    ...(updatedData.status !== undefined
+      ? {
+          status: toDbRepairStatus(updatedData.status) as RepairRequestUpdateData['status'],
+        }
+      : {}),
+  };
+
   const { data, error } = await supabase
     .from('repair_requests')
-    .update(updatedData)
+    .update(payload)
     .eq('id', requestId)
     .select()
     .single();
@@ -93,6 +189,19 @@ export async function deleteRepairRequest(requestId: string) {
     throw new Error('Request ID is required');
   }
 
+  const { error: lookupError } = await supabase
+    .from('repair_requests')
+    .select('id')
+    .eq('id', requestId)
+    .single();
+
+  if (lookupError) {
+    if (lookupError.code === 'PGRST116') {
+      throw new Error('Repair request not found');
+    }
+    throw new Error(formatErrorMessage(lookupError.message));
+  }
+
   const { error } = await supabase.from('repair_requests').delete().eq('id', requestId);
 
   if (error) {
@@ -109,7 +218,7 @@ export async function getRepairRequests(dormId: string) {
     .eq('dorm_id', dormId)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(formatErrorMessage(error.message));
 
   return data;
 }
@@ -124,7 +233,7 @@ export async function getRepairRequestById(requestId: string) {
 
   if (error) {
     if (error.code === 'PGRST116') return null;
-    throw new Error(error.message);
+    throw new Error(formatErrorMessage(error.message));
   }
 
   return data;
@@ -138,7 +247,58 @@ export async function getRepairRequestsByReporter(userId: string) {
     .eq('submitted_by', userId)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(formatErrorMessage(error.message));
 
   return data;
+}
+
+export async function updateRepairStatus(requestId: string, status: RepairWorkflowStatus) {
+  if (!requestId) {
+    throw new Error('Request ID is required');
+  }
+
+  if (!['pending', 'in_progress', 'resolved'].includes(status)) {
+    throw new Error('Repair status is invalid');
+  }
+
+  const dbStatus = toDbRepairStatus(status);
+
+  const { data, error } = await supabase
+    .from('repair_requests')
+    .update({ status: dbStatus })
+    .eq('id', requestId)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      throw new Error('Repair request not found');
+    }
+    throw new Error(formatErrorMessage(error.message));
+  }
+
+  if (data?.submitted_by) {
+    await notifySafely(
+      data.submitted_by,
+      'repair_status_updated',
+      'Repair status updated',
+      `"${data.title || 'Your repair request'}" is now ${status.replace('_', ' ')}.`,
+      'repair',
+    );
+  }
+
+  await logAuditEvent({
+    dormId: data?.dorm_id || null,
+    entityType: 'repair_request',
+    entityId: requestId,
+    action: 'status_update',
+    payload: {
+      status,
+    },
+  });
+
+  return {
+    ...data,
+    status,
+  };
 }
