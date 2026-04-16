@@ -21,6 +21,19 @@ function isMissingTableError(error: any): boolean {
   );
 }
 
+function isPermissionDeniedError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error.code || '').toUpperCase();
+  const message = String(error.message || '').toLowerCase();
+
+  return (
+    code === '42501' ||
+    code === 'PGRST301' ||
+    message.includes('permission denied') ||
+    message.includes('row-level security')
+  );
+}
+
 async function deleteByDormId(table: string, dormId: string): Promise<void> {
   const { error } = await supabase.from(table).delete().eq('dorm_id', dormId);
   if (error && !isMissingTableError(error)) {
@@ -226,9 +239,7 @@ export async function linkDormToManagerByQr(
   }
 
   if (!updatedDorm) {
-    throw new Error(
-      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
-    );
+    throw new Error('Unable to link this dorm right now. Please try again.');
   }
 
   return updatedDorm as Dorm;
@@ -293,9 +304,7 @@ export async function linkDormToManagerByJoinCode(
   }
 
   if (!updatedDorm) {
-    throw new Error(
-      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
-    );
+    throw new Error('Unable to link this dorm right now. Please try again.');
   }
 
   return updatedDorm as Dorm;
@@ -351,9 +360,7 @@ export async function linkDormToManagerByManualCode(
   }
 
   if (!updatedDorm) {
-    throw new Error(
-      'Unable to link this dorm right now. Verify your database update policy for manager linking.',
-    );
+    throw new Error('Unable to link this dorm right now. Please try again.');
   }
 
   return updatedDorm as Dorm;
@@ -574,6 +581,80 @@ export async function leaveDorm(userId: string, dormId: string): Promise<void> {
     .match({ user_id: userId, dorm_id: dormId });
 
   if (error) throw new Error(formatErrorMessage(error.message));
+}
+
+export async function leaveDormAsManager(managerUserId: string, dormId: string): Promise<void> {
+  if (!managerUserId) throw new Error('Manager user ID is required');
+  if (!dormId) throw new Error('Dorm ID is required');
+
+  const { data: managerProfile, error: managerProfileError } = await supabase
+    .from('profiles')
+    .select('is_manager')
+    .eq('id', managerUserId)
+    .single();
+
+  if (managerProfileError) {
+    throw new Error(formatErrorMessage(managerProfileError.message));
+  }
+
+  if (!managerProfile?.is_manager) {
+    throw new Error('Only managers can leave managed dorms');
+  }
+
+  const { data: dorm, error: dormError } = await supabase
+    .from('dorms')
+    .select('created_by')
+    .eq('id', dormId)
+    .single();
+
+  if (dormError) {
+    if (dormError.code === 'PGRST116') {
+      throw new Error('Dorm not found');
+    }
+    throw new Error(formatErrorMessage(dormError.message));
+  }
+
+  if (dorm.created_by !== managerUserId) {
+    throw new Error('You are no longer assigned as the manager for this dorm.');
+  }
+
+  const { data: members, error: membersError } = await supabase
+    .from('dorm_members')
+    .select('user_id')
+    .eq('dorm_id', dormId)
+    .neq('user_id', managerUserId)
+    .order('joined_at', { ascending: true })
+    .limit(1);
+
+  if (membersError) {
+    throw new Error(formatErrorMessage(membersError.message));
+  }
+
+  const newOwnerId = members?.[0]?.user_id;
+  if (!newOwnerId) {
+    throw new Error(
+      'This dorm has no other members to transfer to. Ask a resident to join first, then try leaving again.',
+    );
+  }
+
+  const { data: updatedDorm, error: updateError } = await supabase
+    .from('dorms')
+    .update({ created_by: newOwnerId })
+    .eq('id', dormId)
+    .eq('created_by', managerUserId)
+    .select('id')
+    .maybeSingle();
+
+  if (updateError) {
+    if (isPermissionDeniedError(updateError)) {
+      throw new Error('You do not have permission to leave this dorm.');
+    }
+    throw new Error(formatErrorMessage(updateError.message));
+  }
+
+  if (!updatedDorm) {
+    throw new Error('Unable to leave this dorm right now. Please try again.');
+  }
 }
 
 export async function inviteUserToDorm(userId: string, dormId: string): Promise<DormMember> {

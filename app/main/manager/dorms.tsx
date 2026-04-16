@@ -20,12 +20,13 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import ActionPillButton from '../../../components/ActionPillButton';
 import AvailabilityBadge from '../../../components/AvailabilityBadge';
 import DormCard from '../../../components/DormCard';
+import InlineNotification from '../../../components/InlineNotification';
 import NavBar, { NavBarItem } from '../../../components/Navbar';
 import ProfilePicture from '../../../components/ProfilePicture';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
 import { getCurrentUser } from '../../../lib/auth';
-import { getDormsByManager } from '../../../lib/dorms';
+import { getDormsByManager, leaveDormAsManager } from '../../../lib/dorms';
 import { supabase } from '../../../lib/supabase';
 
 const NAV_ITEMS: NavBarItem[] = [
@@ -62,8 +63,13 @@ export default function ManagerDorms() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [confirmingLeaveId, setConfirmingLeaveId] = useState<string | null>(null);
+  const [leavingDormId, setLeavingDormId] = useState<string | null>(null);
   const [managedDorms, setManagedDorms] = useState<ManagedDorm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [notice, setNotice] = useState<{
+    type: 'error' | 'success' | 'info' | 'warning' | 'tip';
+    text: string;
+  } | null>(null);
 
   const [contentOverflows, setContentOverflows] = useState(false);
   const scrollViewHeight = useRef(0);
@@ -170,9 +176,27 @@ export default function ManagerDorms() {
     }
   };
 
-  const handleLeaveConfirmed = (id: string) => {
-    // TODO: leave dorm via API using id
+  const handleLeaveConfirmed = async (id: string) => {
+    if (leavingDormId) return;
+
+    setNotice(null);
+    setLeavingDormId(id);
     setConfirmingLeaveId(null);
+
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        throw new Error('You must be signed in to leave a dorm');
+      }
+
+      await leaveDormAsManager(user.id, id);
+      await loadManagedDorms();
+      setNotice({ type: 'success', text: 'Dorm left successfully.' });
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error?.message || 'Failed to leave dorm.' });
+    } finally {
+      setLeavingDormId(null);
+    }
   };
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({ ...item }));
@@ -222,6 +246,12 @@ export default function ManagerDorms() {
         >
           <View style={styles.content}>
             <Text style={styles.title}>Dorms</Text>
+            {notice ? (
+              <>
+                <Spacer size="small" />
+                <InlineNotification type={notice.type} text={notice.text} />
+              </>
+            ) : null}
 
             {isLoading ? (
               <View
@@ -246,6 +276,7 @@ export default function ManagerDorms() {
               <View style={styles.table}>
                 {managedDorms.map((dorm) => {
                   const isConfirming = confirmingLeaveId === dorm.id;
+                  const isLeaving = leavingDormId === dorm.id;
                   return (
                     <View key={dorm.id} style={styles.tableRow}>
                       <DormCard
@@ -255,13 +286,18 @@ export default function ManagerDorms() {
                         primaryAction={
                           isConfirming
                             ? {
-                                label: 'Yes, leave dorm',
+                                label: isLeaving ? 'Leaving...' : 'Yes, leave dorm',
                                 onPress: () => handleLeaveConfirmed(dorm.id),
                                 variant: 'danger',
                               }
                             : {
-                                label: 'Leave dorm',
-                                onPress: () => setConfirmingLeaveId(dorm.id),
+                                label: isLeaving ? 'Leaving...' : 'Leave dorm',
+                                onPress: isLeaving
+                                  ? () => undefined
+                                  : () => {
+                                      setNotice(null);
+                                      setConfirmingLeaveId(dorm.id);
+                                    },
                                 variant: 'secondary',
                               }
                         }

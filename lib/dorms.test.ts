@@ -10,6 +10,7 @@ import {
   getManagerOverview,
   joinDorm,
   leaveDorm,
+  leaveDormAsManager,
   linkDormToManagerByJoinCode,
   linkDormToManagerByManualCode,
   linkDormToManagerByQr,
@@ -42,6 +43,7 @@ describe('Dorms System', () => {
       eq: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       in: jest.fn().mockReturnThis(),
+      neq: jest.fn().mockReturnThis(),
       maybeSingle: jest.fn().mockReturnThis(),
       match: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
@@ -162,6 +164,45 @@ describe('Dorms System', () => {
     it('leaves a dorm successfully', async () => {
       mockSupabase.match.mockResolvedValueOnce({ error: null });
       await expect(leaveDorm('user-1', 'dorm-1')).resolves.not.toThrow();
+    });
+  });
+
+  describe('leaveDormAsManager', () => {
+    it('transfers dorm ownership and leaves successfully', async () => {
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({ data: { created_by: 'mgr-1' }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [{ user_id: 'user-2' }], error: null });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({ data: { id: 'dorm-1' }, error: null });
+
+      await expect(leaveDormAsManager('mgr-1', 'dorm-1')).resolves.not.toThrow();
+      expect(mockSupabase.update).toHaveBeenCalledWith({ created_by: 'user-2' });
+    });
+
+    it('throws a clear error when there is no member to transfer ownership to', async () => {
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({ data: { created_by: 'mgr-1' }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [], error: null });
+
+      await expect(leaveDormAsManager('mgr-1', 'dorm-1')).rejects.toThrow(
+        'This dorm has no other members to transfer to. Ask a resident to join first, then try leaving again.',
+      );
+    });
+
+    it('throws a clear error when manager leave update is blocked by permissions', async () => {
+      mockSupabase.single
+        .mockResolvedValueOnce({ data: { is_manager: true }, error: null })
+        .mockResolvedValueOnce({ data: { created_by: 'mgr-1' }, error: null });
+      mockSupabase.limit.mockResolvedValueOnce({ data: [{ user_id: 'user-2' }], error: null });
+      mockSupabase.maybeSingle.mockResolvedValueOnce({
+        data: null,
+        error: { code: '42501', message: 'new row violates row-level security policy' },
+      });
+
+      await expect(leaveDormAsManager('mgr-1', 'dorm-1')).rejects.toThrow(
+        'You do not have permission to leave this dorm.',
+      );
     });
   });
 
@@ -299,7 +340,7 @@ describe('Dorms System', () => {
       mockSupabase.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
 
       await expect(linkDormToManagerByJoinCode('mgr-1', 'CODE12')).rejects.toThrow(
-        'Unable to link this dorm right now. Verify your database update policy for manager linking.',
+        'Unable to link this dorm right now. Please try again.',
       );
     });
   });
