@@ -80,6 +80,7 @@ describe('Authentication Functions', () => {
         options: {
           data: {
             display_name: 'John Doe',
+            is_manager: false,
           },
         },
       });
@@ -215,6 +216,7 @@ describe('Authentication Functions', () => {
         email: 'test@example.com',
         role: 'manager',
         avatarUrl: null,
+        displayName: null,
       });
     });
 
