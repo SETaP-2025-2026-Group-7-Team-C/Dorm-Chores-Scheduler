@@ -493,7 +493,8 @@ export default function Repairs() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {isConnected && (
+      {/* Only show action button when connected and page has loaded */}
+      {isConnected && !isLoading && (
         <View style={styles.actionButtonWrapper}>
           <ActionPillButton
             title="New Request"

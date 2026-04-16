@@ -1,4 +1,6 @@
 import { formatErrorMessage } from './errors';
+import { createInAppNotification } from './notifications';
+import { logAuditEvent } from './audit';
 import { supabase } from './supabase';
 
 export interface RepairRequestData {
@@ -17,6 +19,21 @@ export type RepairWorkflowStatus = 'pending' | 'in_progress' | 'resolved';
 
 function toDbRepairStatus(status: string): string {
   return status === 'resolved' ? 'completed' : status;
+}
+
+async function notifySafely(
+  userId: string,
+  preferenceKey: Parameters<typeof createInAppNotification>[1],
+  title: string,
+  message: string,
+  type: string,
+): Promise<void> {
+  try {
+    await createInAppNotification(userId, preferenceKey, title, message, type);
+  } catch (error) {
+    // Notifications must never block core repair flows.
+    console.warn('Notification delivery failed', error);
+  }
 }
 
 /**
@@ -65,6 +82,36 @@ export async function createRepairRequest(
   if (error) {
     throw new Error(formatErrorMessage(error.message));
   }
+
+  // Notify manager that a new repair request was submitted.
+  const { data: dorm, error: dormError } = await supabase
+    .from('dorms')
+    .select('created_by')
+    .eq('id', dormId)
+    .single();
+
+  if (!dormError && dorm?.created_by && dorm.created_by !== userId) {
+    await notifySafely(
+      dorm.created_by,
+      'new_repair_request',
+      'New repair request',
+      `A new repair request "${requestData.title.trim()}" was submitted.`,
+      'repair',
+    );
+  }
+
+  await logAuditEvent({
+    actorId: userId,
+    dormId,
+    entityType: 'repair_request',
+    entityId: data.id,
+    action: 'create',
+    payload: {
+      title: data.title,
+      urgency: data.urgency,
+      status: data.status,
+    },
+  });
 
   return data;
 }
@@ -229,6 +276,26 @@ export async function updateRepairStatus(requestId: string, status: RepairWorkfl
     }
     throw new Error(formatErrorMessage(error.message));
   }
+
+  if (data?.submitted_by) {
+    await notifySafely(
+      data.submitted_by,
+      'repair_status_updated',
+      'Repair status updated',
+      `"${data.title || 'Your repair request'}" is now ${status.replace('_', ' ')}.`,
+      'repair',
+    );
+  }
+
+  await logAuditEvent({
+    dormId: data?.dorm_id || null,
+    entityType: 'repair_request',
+    entityId: requestId,
+    action: 'status_update',
+    payload: {
+      status,
+    },
+  });
 
   return {
     ...data,

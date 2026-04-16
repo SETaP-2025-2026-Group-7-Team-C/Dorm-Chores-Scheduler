@@ -1,3 +1,4 @@
+import { logAuditEvent } from './audit';
 import { getDormMembers } from './dorms';
 import { formatErrorMessage } from './errors';
 import { createInAppNotification } from './notifications';
@@ -5,6 +6,21 @@ import { supabase } from './supabase';
 
 const MAX_CHORES_PER_USER = 100;
 const MAX_CHORES_PER_DORM = 500;
+
+async function notifySafely(
+  userId: string,
+  preferenceKey: Parameters<typeof createInAppNotification>[1],
+  title: string,
+  message: string,
+  type: string,
+): Promise<void> {
+  try {
+    await createInAppNotification(userId, preferenceKey, title, message, type);
+  } catch (error) {
+    // Notifications must never block core chore flows.
+    console.warn('Notification delivery failed', error);
+  }
+}
 
 export interface ChoreMeta {
   due_in_days?: number;
@@ -31,14 +47,21 @@ export interface Chore extends ChoreData {
   assignedName?: string;
 }
 
-function normalizeUnassignedStatus(chore: Chore): Chore {
-  if (!chore.meta?.assignedTo && chore.status !== 'completed') {
-    return {
-      ...chore,
-      status: 'unassigned',
-    };
-  }
-  return chore;
+function normalizeChoreStatus(status?: string): 'pending' | 'in_progress' | 'completed' {
+  const normalized = String(status || '')
+    .toLowerCase()
+    .trim();
+  if (normalized === 'completed') return 'completed';
+  if (normalized === 'in_progress') return 'in_progress';
+  // Backward compatibility for older status values (assigned/unassigned/overdue/etc).
+  return 'pending';
+}
+
+function withNormalizedStatus(chore: Chore): Chore {
+  return {
+    ...chore,
+    status: normalizeChoreStatus(chore.status),
+  };
 }
 
 function shuffleIds(ids: string[]): string[] {
@@ -57,7 +80,36 @@ async function ensureDormChoreCapacity(dormId: string): Promise<void> {
   }
 }
 
-async function getEligibleAssignees(dormId: string, memberIds: string[]): Promise<string[]> {
+async function getOptOutUserSet(
+  dormId: string,
+  category: string | null,
+  targetDate: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('chore_opt_outs')
+    .select('user_id, category')
+    .eq('dorm_id', dormId);
+
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') {
+      return new Set();
+    }
+    throw new Error(formatErrorMessage(error.message));
+  }
+
+  return new Set(
+    (data || [])
+      .filter((row: any) => !row.category || !category || row.category === category)
+      .map((row: any) => row.user_id),
+  );
+}
+
+async function getEligibleAssignees(
+  dormId: string,
+  memberIds: string[],
+  category: string | null,
+  targetDate: string,
+): Promise<string[]> {
   if (memberIds.length === 0) return [];
 
   const { data: profiles, error: profileError } = await supabase
@@ -72,6 +124,7 @@ async function getEligibleAssignees(dormId: string, memberIds: string[]): Promis
       .filter((p: any) => p.availability_status === 'unavailable')
       .map((p: any) => p.id),
   );
+  const optOutSet = await getOptOutUserSet(dormId, category, targetDate);
 
   const { data: dormChores, error: choreError } = await supabase
     .from('chores')
@@ -91,7 +144,9 @@ async function getEligibleAssignees(dormId: string, memberIds: string[]): Promis
 
   return memberIds.filter(
     (memberId) =>
-      !unavailableSet.has(memberId) && (activeCountByUser[memberId] || 0) < MAX_CHORES_PER_USER,
+      !unavailableSet.has(memberId) &&
+      !optOutSet.has(memberId) &&
+      (activeCountByUser[memberId] || 0) < MAX_CHORES_PER_USER,
   );
 }
 
@@ -101,9 +156,6 @@ async function autoAssignUnassignedChores(dormId: string, chores: Chore[]): Prom
 
   const members = await getDormMembers(dormId);
   const memberIds = (members || []).map((m) => m.user_id);
-  const eligibleIds = await getEligibleAssignees(dormId, memberIds);
-  if (eligibleIds.length === 0) return chores.map(normalizeUnassignedStatus);
-
   const activeCountByUser: Record<string, number> = {};
   chores
     .filter((c) => c.status !== 'completed' && !!c.meta?.assignedTo)
@@ -114,6 +166,17 @@ async function autoAssignUnassignedChores(dormId: string, chores: Chore[]): Prom
 
   const result: Chore[] = [...chores];
   for (const chore of unassignedChores) {
+    const createdAt = chore.created_at ? new Date(chore.created_at) : new Date();
+    const dueDate = Number.isNaN(createdAt.getTime()) ? new Date() : createdAt;
+    dueDate.setDate(dueDate.getDate() + (chore.meta?.due_in_days || 7));
+    const eligibleIds = await getEligibleAssignees(
+      dormId,
+      memberIds,
+      chore.meta?.category || null,
+      dueDate.toISOString().slice(0, 10),
+    );
+    if (eligibleIds.length === 0) continue;
+
     const nextAssignee = eligibleIds.find(
       (id) => (activeCountByUser[id] || 0) < MAX_CHORES_PER_USER,
     );
@@ -133,7 +196,7 @@ async function autoAssignUnassignedChores(dormId: string, chores: Chore[]): Prom
       .update(
         packChoreData({
           ...chore,
-          status: 'assigned',
+          status: 'pending',
           meta: updatedMeta,
         }),
       )
@@ -151,7 +214,7 @@ async function autoAssignUnassignedChores(dormId: string, chores: Chore[]): Prom
     activeCountByUser[nextAssignee] = (activeCountByUser[nextAssignee] || 0) + 1;
   }
 
-  return result.map(normalizeUnassignedStatus);
+  return result.map(withNormalizedStatus);
 }
 
 export function packChoreData(data: ChoreData): any {
@@ -181,7 +244,7 @@ export function parseChore(data: any): Chore {
   } else {
     chore.meta = {};
   }
-  return chore;
+  return withNormalizedStatus(chore);
 }
 
 export async function getChores(dormId: string): Promise<Chore[]> {
@@ -235,7 +298,7 @@ export async function getChoreById(choreId: string): Promise<Chore | null> {
     if (error.code === 'PGRST116') return null;
     throw new Error(formatErrorMessage(error.message));
   }
-  return normalizeUnassignedStatus(parseChore(data));
+  return parseChore(data);
 }
 
 export async function createChore(dormId: string, choreData: ChoreData): Promise<Chore> {
@@ -248,7 +311,14 @@ export async function createChore(dormId: string, choreData: ChoreData): Promise
 
   const members = await getDormMembers(dormId);
   const memberIds = (members || []).map((m) => m.user_id);
-  const eligibleIds = await getEligibleAssignees(dormId, memberIds);
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + (choreData.meta?.due_in_days || 7));
+  const eligibleIds = await getEligibleAssignees(
+    dormId,
+    memberIds,
+    choreData.meta?.category || null,
+    dueDate.toISOString().slice(0, 10),
+  );
 
   const requestedAssignee = choreData.meta?.assignedTo;
   const canUseRequestedAssignee = !!requestedAssignee && eligibleIds.includes(requestedAssignee);
@@ -278,7 +348,7 @@ export async function createChore(dormId: string, choreData: ChoreData): Promise
     };
   }
 
-  choreData.status = choreData.meta?.assignedTo ? choreData.status || 'assigned' : 'unassigned';
+  choreData.status = normalizeChoreStatus(choreData.status || 'pending');
 
   const { data, error } = await supabase
     .from('chores')
@@ -292,7 +362,32 @@ export async function createChore(dormId: string, choreData: ChoreData): Promise
     .single();
 
   if (error) throw new Error(formatErrorMessage(error.message));
-  return normalizeUnassignedStatus(parseChore(data));
+  const createdChore = parseChore(data);
+
+  if (createdChore.meta?.assignedTo) {
+    await notifySafely(
+      createdChore.meta.assignedTo,
+      'new_chore_assignment',
+      'New chore assigned',
+      `"${createdChore.title}" has been assigned to you.`,
+      'chore',
+    );
+  }
+
+  await logAuditEvent({
+    dormId,
+    entityType: 'chore',
+    entityId: createdChore.id,
+    action: 'create',
+    payload: {
+      title: createdChore.title,
+      status: createdChore.status,
+      assignedTo: createdChore.meta?.assignedTo || null,
+      category: createdChore.meta?.category || null,
+    },
+  });
+
+  return createdChore;
 }
 
 export async function updateChore(
@@ -302,6 +397,10 @@ export async function updateChore(
   if (!choreId) throw new Error('Chore ID is required');
   if (updatedData.title !== undefined && updatedData.title.trim() === '') {
     throw new Error('Chore title cannot be empty');
+  }
+
+  if (updatedData.status !== undefined) {
+    updatedData.status = normalizeChoreStatus(updatedData.status);
   }
 
   const baseChore = await getChoreById(choreId);
@@ -326,7 +425,17 @@ export async function updateChore(
     if (error.code === 'PGRST116') throw new Error('Chore not found');
     throw new Error(formatErrorMessage(error.message));
   }
-  return normalizeUnassignedStatus(parseChore(data));
+  const updatedChore = parseChore(data);
+
+  await logAuditEvent({
+    dormId: updatedChore.dorm_id,
+    entityType: 'chore',
+    entityId: updatedChore.id,
+    action: 'update',
+    payload: { status: updatedChore.status },
+  });
+
+  return updatedChore;
 }
 
 export async function deleteChore(choreId: string): Promise<void> {
@@ -335,6 +444,12 @@ export async function deleteChore(choreId: string): Promise<void> {
   const { error } = await supabase.from('chores').delete().eq('id', choreId);
 
   if (error) throw new Error(formatErrorMessage(error.message));
+  await logAuditEvent({
+    entityType: 'chore',
+    entityId: choreId,
+    action: 'delete',
+    payload: {},
+  });
 }
 
 export async function markChoreComplete(choreId: string): Promise<Chore> {
@@ -347,7 +462,7 @@ export async function markChoreComplete(choreId: string): Promise<Chore> {
   const completedChore = await updateChore(choreId, { status: 'completed' });
 
   if (chore.meta?.assignedTo) {
-    await createInAppNotification(
+    await notifySafely(
       chore.meta.assignedTo,
       'chore_completed',
       'Chore completed',
@@ -361,7 +476,7 @@ export async function markChoreComplete(choreId: string): Promise<Chore> {
     await createChore(chore.dorm_id, {
       title: chore.title,
       description: chore.description,
-      status: 'assigned',
+      status: 'pending',
       meta: {
         ...baseMeta,
       },
@@ -369,4 +484,11 @@ export async function markChoreComplete(choreId: string): Promise<Chore> {
   }
 
   return completedChore;
+}
+
+export async function updateChoreWorkflowStatus(
+  choreId: string,
+  status: 'pending' | 'in_progress' | 'completed',
+): Promise<Chore> {
+  return updateChore(choreId, { status });
 }

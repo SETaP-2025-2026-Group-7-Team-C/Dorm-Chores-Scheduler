@@ -20,7 +20,12 @@ import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
 import Spacer from '../../../components/Spacer';
 import { COLOURS } from '../../../constants/colours';
-import { Chore, getChoreById, markChoreComplete } from '../../../lib/chores';
+import {
+  Chore,
+  getChoreById,
+  markChoreComplete,
+  updateChoreWorkflowStatus,
+} from '../../../lib/chores';
 import { supabase } from '../../../lib/supabase';
 
 dayjs.extend(relativeTime);
@@ -78,6 +83,28 @@ export default function ViewChore() {
       router.back();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to complete chore');
+    }
+  };
+
+  const handleMarkInProgress = async () => {
+    if (!chore) return;
+    try {
+      await updateChoreWorkflowStatus(chore.id, 'in_progress');
+      await loadChore();
+      Alert.alert('Success', 'Chore is now in progress.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update chore status');
+    }
+  };
+
+  const handleMarkPending = async () => {
+    if (!chore) return;
+    try {
+      await updateChoreWorkflowStatus(chore.id, 'pending');
+      await loadChore();
+      Alert.alert('Success', 'Chore moved back to pending.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update chore status');
     }
   };
 
@@ -186,6 +213,24 @@ export default function ViewChore() {
                 ) : null}
 
                 <Spacer size="large" />
+
+                {chore.status === 'pending' && (
+                  <>
+                    <Button title="Mark as in progress" onPress={handleMarkInProgress} />
+                    <Spacer size="small" />
+                  </>
+                )}
+
+                {chore.status === 'in_progress' && (
+                  <>
+                    <Button
+                      title="Move back to pending"
+                      onPress={handleMarkPending}
+                      variant="secondary"
+                    />
+                    <Spacer size="small" />
+                  </>
+                )}
 
                 {chore.status !== 'completed' && (
                   <>

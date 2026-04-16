@@ -60,6 +60,10 @@ export async function createInAppNotification(
   message: string,
   type: string,
 ) {
+  const startedAt = Date.now();
+  let delivered = false;
+  let errorMessage: string | null = null;
+
   const { data: prefsRow, error: prefsError } = await supabase
     .from('notification_preferences')
     .select('preferences')
@@ -67,18 +71,40 @@ export async function createInAppNotification(
     .single();
 
   if (prefsError && prefsError.code !== 'PGRST116') {
-    throw new Error(formatErrorMessage(prefsError.message));
+    errorMessage = formatErrorMessage(prefsError.message);
+    await recordNotificationMetric(
+      userId,
+      preferenceKey,
+      false,
+      Date.now() - startedAt,
+      errorMessage,
+    );
+    throw new Error(errorMessage);
   }
 
   const preferences = prefsRow?.preferences ?? {};
 
   // Global notification toggle
   if (preferences['all_notifications'] === false) {
+    await recordNotificationMetric(
+      userId,
+      preferenceKey,
+      false,
+      Date.now() - startedAt,
+      'Muted globally',
+    );
     return;
   }
 
   // Specific notification toggle
   if (preferences[preferenceKey] === false) {
+    await recordNotificationMetric(
+      userId,
+      preferenceKey,
+      false,
+      Date.now() - startedAt,
+      'Muted by preference',
+    );
     return;
   }
 
@@ -90,8 +116,19 @@ export async function createInAppNotification(
   });
 
   if (error) {
-    throw new Error(formatErrorMessage(error.message));
+    errorMessage = formatErrorMessage(error.message);
+    await recordNotificationMetric(
+      userId,
+      preferenceKey,
+      false,
+      Date.now() - startedAt,
+      errorMessage,
+    );
+    throw new Error(errorMessage);
   }
+
+  delivered = true;
+  await recordNotificationMetric(userId, preferenceKey, delivered, Date.now() - startedAt, null);
 }
 
 // Get in-app notifications
@@ -118,5 +155,25 @@ export async function markNotificationAsRead(notificationId: string) {
 
   if (error) {
     throw new Error(formatErrorMessage(error.message));
+  }
+}
+
+async function recordNotificationMetric(
+  userId: string,
+  preferenceKey: string,
+  delivered: boolean,
+  latencyMs: number,
+  errorMessage: string | null,
+) {
+  try {
+    await supabase.from('notification_delivery_metrics').insert({
+      user_id: userId,
+      preference_key: preferenceKey,
+      delivered,
+      latency_ms: latencyMs,
+      error_message: errorMessage,
+    });
+  } catch (error) {
+    console.warn('Failed to record notification metric', error);
   }
 }

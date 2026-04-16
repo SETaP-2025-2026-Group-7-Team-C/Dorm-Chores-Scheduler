@@ -41,7 +41,7 @@ type RepairDetail = {
   description: string;
   location: string;
   urgency: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'rejected';
+  status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'resolved';
   created_at?: string;
 };
 
