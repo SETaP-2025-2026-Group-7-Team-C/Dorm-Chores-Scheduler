@@ -1,3 +1,5 @@
+# MkDocs build output
+dcs-docs/site/
 # Dependencies
 node_modules/
 
