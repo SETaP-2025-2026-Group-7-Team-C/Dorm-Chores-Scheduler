@@ -1,9 +1,51 @@
-site_name: Dorm Chores Schedule Documntation
-site_description: Documentation for the Dorm Chores Schedule project
+site_name: Dorm Chores Scheduler Documentation
+site_description: Documentation for the Dorm Chores Scheduler project
 site_author: Group 7 (Team C)
+
+repo_url: https://github.com/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler
+repo_name: Dorm Chores Scheduler
 
 theme:
   name: material
+  logo: assets/images/logo.png
+  favicon: assets/images/favicon.ico
+  palette:
+    - scheme: default
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.top
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - content.action.view
+  font:
+    text: Roboto
+    code: Fira Mono
+  language: en
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler
+      name: GitHub
+  version:
+    default: stable
 
 nav:
   - Home: index.md
@@ -11,3 +53,5 @@ nav:
   - Components: components.md
   - Validation: validation.md
   - Pages & Authentication: pages-authentication.md
+  - Database: database.md
+  - Testing: testing.md

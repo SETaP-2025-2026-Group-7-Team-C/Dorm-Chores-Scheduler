@@ -14,6 +14,7 @@ Dorm Chores Scheduler is an application designed to help manage and schedule cho
 - **Authentication:** Authentication flow and pages
 - **Database:** Schema, reference data, and triggers
 - **Testing:** How to run and write tests
+
   (Add further sections here)
 
 ## Quick Links
@@ -22,6 +23,7 @@ Dorm Chores Scheduler is an application designed to help manage and schedule cho
 - [Components](components.md)
 - [Validation](validation.md)
 - [Authentication Pages](pages-authentication.md)
-- [Database Schema](database-schema.md)
+- [Database Schema](database.md)
 - [Testing](testing.md)
+
   (Add further links here)
