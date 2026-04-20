@@ -16,25 +16,30 @@ Dorm Chores Scheduler is an application designed to help manage and schedule cho
 ## Installation
 
 1. **Clone the repository:**
-   ```sh
-   git clone <your-repo-url>
+
+   ```
+   git clone https://github.com/SETaP-2025-2026-Group-7-Team-C/Dorm-Chores-Scheduler.git
+   ```
+
+   ```
    cd Dorm-Chores-Scheduler
    ```
+
 2. **Install dependencies:**
-   ```sh
+   ```
    npm install
    # or
    yarn install
    ```
 3. **Install Expo CLI (if not already installed):**
-   ```sh
+   ```
    npm install -g expo-cli
    ```
 
 ## Running the App
 
 1. **Start the development server:**
-   ```sh
+   ```
    npx expo start
    ```
 2. **Open the app:**
@@ -56,7 +61,7 @@ Dorm Chores Scheduler is an application designed to help manage and schedule cho
 - UI tests are located in `app/ui-tests/`
 - Unit and integration tests are in `lib/` (files ending with `.test.ts`)
 - Run tests with:
-  ```sh
+  ```
   npm test
   ```
 
