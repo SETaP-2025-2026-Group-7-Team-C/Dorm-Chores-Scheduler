@@ -176,20 +176,11 @@ The validation system is also expected to reject suspicious input that looks lik
 
 Examples of suspicious patterns include:
 
-- `' OR 1=1`
-- `DROP TABLE`
-- `SELECT * FROM`
-- `INSERT INTO`
-- `DELETE FROM`
-- `--`
-- `/* ... */`
-- `;`
-
 ### Purpose
 
 These checks help prevent users from entering strings that may later be interpreted as executable SQL or otherwise unsafe input.
 
----
+```
 
 ## Test Coverage
 
@@ -226,3 +217,4 @@ If new validation rules are added later, this file should be updated so contribu
 - where each validator is used
 - which forms depend on it
 - which tests verify it
+```
