@@ -192,7 +192,9 @@ User roles are determined using the `profiles` table.
 The database design separates:
 
 - authentication (handled by Supabase Auth)  
-- application data (stored in tables like `profiles` and notifications)  
+- application data (stored in tables like `profiles` and notifications)
+
+  
 
 Key design principles include:
 
