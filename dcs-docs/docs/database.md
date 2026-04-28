@@ -27,7 +27,7 @@ Authentication is handled using **Supabase Auth**.
 
 - Users are authenticated through `supabase.auth`
 - Sensitive authentication data is handled securely by Supabase
-- App-specific data is stored separately in the database .
+- App-specific data is stored separately in the database
 
 ---
 
@@ -200,3 +200,56 @@ Key design principles include:
 - soft deletion instead of permanent removal
 - flexible notification settings
 - a scalable user profile system
+
+---
+
+## Backend Implementation (Code Structure)
+
+The database is accessed and managed through backend utility functions located in the `lib/` folder.
+
+### Authentication Functions
+
+**File:** `lib/auth.ts`
+
+Handles all authentication-related logic, including:
+
+- user sign-in and sign-up using Supabase Auth  
+- password reset requests  
+- retrieving the current authenticated user  
+- updating user profile data (e.g. display name)  
+- soft deleting user accounts  
+
+These functions act as a layer between the frontend and Supabase, ensuring validation and error handling are consistently applied.
+
+---
+
+### Notification System Functions
+
+**File:** `lib/notifications.ts`
+
+Handles all notification-related operations:
+
+- retrieving user notification preferences  
+- updating notification settings  
+- creating in-app notifications  
+- marking notifications as read  
+
+The system checks user preferences before creating notifications, ensuring users only receive relevant updates.
+
+---
+
+### Data Access Pattern
+
+All database interactions follow a consistent pattern:
+
+1. Validate input (using validation functions)
+2. Call Supabase (`supabase.from(...)`)
+3. Handle errors using `formatErrorMessage`
+4. Return structured results to the frontend
+
+### Benefits
+
+- Keeps database logic separate from UI code  
+- Improves maintainability and readability  
+- Ensures consistent error handling across the app  
+- Makes the system easier to scale and extend  
