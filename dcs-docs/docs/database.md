@@ -213,11 +213,11 @@ The database is accessed and managed through backend utility functions located i
 
 Handles all authentication-related logic, including:
 
-- user sign-in and sign-up using Supabase Auth  
-- password reset requests  
-- retrieving the current authenticated user  
-- updating user profile data (e.g. display name)  
-- soft deleting user accounts  
+- user sign-in and sign-up using Supabase Auth
+- password reset requests
+- retrieving the current authenticated user
+- updating user profile data (e.g. display name)
+- soft deleting user accounts
 
 These functions act as a layer between the frontend and Supabase, ensuring validation and error handling are consistently applied.
 
@@ -229,10 +229,10 @@ These functions act as a layer between the frontend and Supabase, ensuring valid
 
 Handles all notification-related operations:
 
-- retrieving user notification preferences  
-- updating notification settings  
-- creating in-app notifications  
-- marking notifications as read  
+- retrieving user notification preferences
+- updating notification settings
+- creating in-app notifications
+- marking notifications as read
 
 The system checks user preferences before creating notifications, ensuring users only receive relevant updates.
 
@@ -249,7 +249,7 @@ All database interactions follow a consistent pattern:
 
 ### Benefits
 
-- Keeps database logic separate from UI code  
-- Improves maintainability and readability  
-- Ensures consistent error handling across the app  
-- Makes the system easier to scale and extend  
+- Keeps database logic separate from UI code
+- Improves maintainability and readability
+- Ensures consistent error handling across the app
+- Makes the system easier to scale and extend
