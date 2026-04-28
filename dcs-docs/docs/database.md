@@ -27,7 +27,7 @@ Authentication is handled using **Supabase Auth**.
 
 - Users are authenticated through `supabase.auth`  
 - Sensitive authentication data is handled securely by Supabase  
-- App-specific data is stored separately in the database  
+- App-specific data is stored separately in the database . 
 
 ---
 
