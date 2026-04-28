@@ -82,6 +82,8 @@ export default function Dorms() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+  const actionButtonTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
 
   const loadDorms = async () => {
     setIsLoading(true);
@@ -221,6 +223,26 @@ export default function Dorms() {
       const value = distanceFromBottom < GRADIENT_THRESHOLD ? 0 : 1;
       navGradientOpacity.setValue(value);
     }
+
+    // FAB Animation
+    const isScrollingDown = scrollY > lastScrollY.current && scrollY > 0;
+    const isAtBottom = scrollY + layoutMeasurement.height >= contentSize.height - 20;
+
+    if (isAtBottom || !isScrollingDown || scrollY < 50) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else if (isScrollingDown && scrollY > 100) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 150, // Move it further down since there are two buttons
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+
+    lastScrollY.current = scrollY;
   };
 
   const isEmpty = !currentDorm && otherDorms.length === 0;
@@ -394,7 +416,12 @@ export default function Dorms() {
           </View>
         </View>
       ) : (
-        <View style={styles.pillButtonsWrapper}>
+        <Animated.View
+          style={[
+            styles.pillButtonsWrapper,
+            { transform: [{ translateY: actionButtonTranslateY }] },
+          ]}
+        >
           <ActionPillButton
             title="Join Dorm"
             iconName="sign-in-alt"
@@ -407,7 +434,7 @@ export default function Dorms() {
             iconName="plus"
             onPress={() => router.push('/main/student/create-dorm')}
           />
-        </View>
+        </Animated.View>
       )}
 
       {/* White panel behind navbar to prevent see-through */}
@@ -466,7 +493,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 240,
   },
   content: {
     marginHorizontal: 20,

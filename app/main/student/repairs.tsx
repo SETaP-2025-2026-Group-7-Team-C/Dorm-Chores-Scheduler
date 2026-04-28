@@ -106,6 +106,8 @@ export default function Repairs() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+  const actionButtonTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
 
   const getRepairStatusChip = (status: string) => {
     const normalized = String(status || 'pending').toLowerCase();
@@ -276,13 +278,46 @@ export default function Repairs() {
       const value = distanceFromBottom < GRADIENT_THRESHOLD ? 0 : 1;
       navGradientOpacity.setValue(value);
     }
+
+    // FAB Animation
+    const isScrollingDown = scrollY > lastScrollY.current && scrollY > 0;
+    const isAtBottom = scrollY + layoutMeasurement.height >= contentSize.height - 20;
+
+    if (isAtBottom || !isScrollingDown || scrollY < 50) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else if (isScrollingDown && scrollY > 100) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 100,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+
+    lastScrollY.current = scrollY;
   };
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({
     ...item,
   }));
 
-  const isEmpty = repairRequests.length === 0;
+  // Filter repairs for tab logic
+  let displayRepairs = repairRequests;
+  if (activeFilter === 'Completed') {
+    displayRepairs = repairRequests.filter((r) => r.statusChip.label === 'Resolved');
+  } else if (activeFilter === 'Mine') {
+    // Optionally, filter for user's own repairs if you have user context
+    // For now, show all except resolved
+    displayRepairs = repairRequests.filter((r) => r.statusChip.label !== 'Resolved');
+  } else {
+    // 'All' tab: show all except resolved
+    displayRepairs = repairRequests.filter((r) => r.statusChip.label !== 'Resolved');
+  }
+
+  const isEmpty = displayRepairs.length === 0;
 
   return (
     <View style={styles.container}>
@@ -375,26 +410,6 @@ export default function Repairs() {
                   >
                     <ActivityIndicator size="large" color={COLOURS.black} />
                   </View>
-                ) : isEmpty ? (
-                  <>
-                    <Spacer size="large" />
-
-                    <View style={styles.noneFound}>
-                      <View style={styles.iconWrapper}>
-                        <FontAwesome5 name="wrench" size={40} color={COLOURS.black} />
-                      </View>
-
-                      <Text style={styles.noneFoundTitle}>No repairs found</Text>
-
-                      <Text style={styles.noneFoundSubtitle}>
-                        Something need repaired?{' '}
-                        <InlineButton
-                          title="Request repair"
-                          onPress={() => router.push('/main/student/request-repair')}
-                        />
-                      </Text>
-                    </View>
-                  </>
                 ) : (
                   <>
                     <Spacer size="medium" />
@@ -418,19 +433,36 @@ export default function Repairs() {
 
                     <Spacer size="medium" />
 
-                    {repairRequests.map((request, index) => (
-                      <View key={request.id}>
-                        <ListItem
-                          title={request.title}
-                          iconName={request.iconName}
-                          subtitle={request.subtitle}
-                          statusChip={request.statusChip}
-                          onPress={() => router.push(`/main/student/view-repair?id=${request.id}`)}
-                        />
-
-                        {index < repairRequests.length - 1 && <Spacer size="small" />}
+                    {isEmpty ? (
+                      <View style={styles.noneFound}>
+                        <View style={styles.iconWrapper}>
+                          <FontAwesome5 name="wrench" size={40} color={COLOURS.black} />
+                        </View>
+                        <Text style={styles.noneFoundTitle}>No repairs found</Text>
+                        <Text style={styles.noneFoundSubtitle}>
+                          Something need repaired?{' '}
+                          <InlineButton
+                            title="Request repair"
+                            onPress={() => router.push('/main/student/request-repair')}
+                          />
+                        </Text>
                       </View>
-                    ))}
+                    ) : (
+                      displayRepairs.map((request, index) => (
+                        <View key={request.id}>
+                          <ListItem
+                            title={request.title}
+                            iconName={request.iconName}
+                            subtitle={request.subtitle}
+                            statusChip={request.statusChip}
+                            onPress={() =>
+                              router.push(`/main/student/view-repair?id=${request.id}`)
+                            }
+                          />
+                          {index < displayRepairs.length - 1 && <Spacer size="small" />}
+                        </View>
+                      ))
+                    )}
                   </>
                 )}
 
@@ -495,13 +527,18 @@ export default function Repairs() {
 
       {/* Only show action button when connected and page has loaded */}
       {isConnected && !isLoading && (
-        <View style={styles.actionButtonWrapper}>
+        <Animated.View
+          style={[
+            styles.actionButtonWrapper,
+            { transform: [{ translateY: actionButtonTranslateY }] },
+          ]}
+        >
           <ActionPillButton
             title="New Request"
             iconName="plus"
             onPress={() => router.push('/main/student/request-repair')}
           />
-        </View>
+        </Animated.View>
       )}
 
       {/* White panel behind navbar to prevent see-through */}
@@ -560,7 +597,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 180,
   },
   content: {
     marginHorizontal: 20,
