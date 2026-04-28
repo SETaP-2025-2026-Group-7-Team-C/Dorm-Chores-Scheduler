@@ -82,6 +82,8 @@ export default function Chores() {
 
   const headerGradientOpacity = useRef(new Animated.Value(0)).current;
   const navGradientOpacity = useRef(new Animated.Value(0)).current;
+  const actionButtonTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
 
   const loadChores = async () => {
     setIsLoading(true);
@@ -150,6 +152,26 @@ export default function Chores() {
       const value = distanceFromBottom < GRADIENT_THRESHOLD ? 0 : 1;
       navGradientOpacity.setValue(value);
     }
+
+    // FAB Animation
+    const isScrollingDown = scrollY > lastScrollY.current && scrollY > 0;
+    const isAtBottom = scrollY + layoutMeasurement.height >= contentSize.height - 20;
+
+    if (isAtBottom || !isScrollingDown || scrollY < 50) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else if (isScrollingDown && scrollY > 100) {
+      Animated.timing(actionButtonTranslateY, {
+        toValue: 100,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+
+    lastScrollY.current = scrollY;
   };
 
   const items: NavBarItem[] = NAV_ITEMS.map((item) => ({
@@ -376,13 +398,18 @@ export default function Chores() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={styles.newChoreButtonWrapper}>
+      <Animated.View
+        style={[
+          styles.newChoreButtonWrapper,
+          { transform: [{ translateY: actionButtonTranslateY }] },
+        ]}
+      >
         <ActionPillButton
           title="New Chore"
           iconName="plus"
           onPress={() => router.push('/main/student/create-chore')}
         />
-      </View>
+      </Animated.View>
 
       {/* White panel behind navbar to prevent see-through */}
       <View style={styles.navBarBackground} pointerEvents="none" />
@@ -440,7 +467,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 180,
   },
   content: {
     marginHorizontal: 20,

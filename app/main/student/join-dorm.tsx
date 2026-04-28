@@ -12,11 +12,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
-import { FontAwesome5 } from '@expo/vector-icons';
 import Button from '../../../components/Button';
 import HeaderBackButton from '../../../components/HeaderBackButton';
 import InlineButton from '../../../components/InlineButton';
@@ -38,7 +36,6 @@ type DormPreview = {
 
 export default function JoinDorm() {
   const [inviteCode, setInviteCode] = useState('');
-  const [isCodeDropdownOpen, setIsCodeDropdownOpen] = useState(false);
   const [dormPreview, setDormPreview] = useState<DormPreview | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -186,48 +183,27 @@ export default function JoinDorm() {
 
             <Spacer size="large" />
 
-            <View style={styles.dropdownContainer}>
-              <TouchableOpacity
-                style={styles.dropdownHeader}
-                onPress={() => setIsCodeDropdownOpen((prev) => !prev)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.dropdownHeaderText}>Enter invite code</Text>
-                <FontAwesome5
-                  name={isCodeDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={COLOURS.black}
-                />
-              </TouchableOpacity>
+            <Text style={styles.inputLabel}>Invite code</Text>
+            <Input
+              value={inviteCode}
+              onChangeText={(text) => {
+                setInviteCode(text.toUpperCase());
+                setDormPreview(null);
+                setNotice(null);
+              }}
+              placeholder="e.g. AB12CD"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
 
-              {isCodeDropdownOpen ? (
-                <View style={styles.dropdownContent}>
-                  <Text style={styles.inputLabel}>Invite code</Text>
-                  <Input
-                    value={inviteCode}
-                    onChangeText={(text) => {
-                      setInviteCode(text.toUpperCase());
-                      setDormPreview(null);
-                      setNotice(null);
-                    }}
-                    placeholder="e.g. AB12CD"
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                  />
+            <Spacer size="large" />
 
-                  <Spacer size="large" />
-
-                  <Button
-                    title={isLookingUp ? 'Looking up...' : 'Look up dorm'}
-                    onPress={handleLookUp}
-                    variant="secondary"
-                    disabled={isLookingUp}
-                  />
-                </View>
-              ) : (
-                <Text style={styles.dropdownHint}>Closed by default for a cleaner view</Text>
-              )}
-            </View>
+            <Button
+              title={isLookingUp ? 'Looking up...' : 'Look up dorm'}
+              onPress={handleLookUp}
+              variant="secondary"
+              disabled={isLookingUp}
+            />
 
             {dormPreview && (
               <>

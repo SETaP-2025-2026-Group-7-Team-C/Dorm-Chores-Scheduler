@@ -79,10 +79,24 @@ export default function CreateDorm() {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData?.user) throw new Error('User not authenticated.');
 
-      const dorm = await createDorm({ name: nameTrimmed }, userData.user.id);
+      const localUserId = userData.user.id;
+      if (!localUserId) {
+        setNotice({ type: 'error', text: 'Could not determine your user ID.' });
+        return;
+      }
 
-      // Note: we can skip joinDorm here if we decide to just automatically join them on backend, but let's keep it.
-      await joinDorm(userData.user.id, dorm.join_code);
+      const dorm = await createDorm({ name: nameTrimmed }, localUserId);
+
+      if (dorm.created_by !== localUserId) {
+        console.warn('Dorm created_by does not match local user ID!', { dorm, localUserId });
+        setNotice({
+          type: 'error',
+          text: 'Dorm creation failed due to account mismatch. Please try again.',
+        });
+        return;
+      }
+
+      await joinDorm(localUserId, dorm.join_code);
       await setActiveDormId(dorm.id);
 
       router.push('/main/student/dorms');
