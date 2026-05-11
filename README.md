@@ -25,35 +25,35 @@ By centralising chore tracking and maintenance requests, Dorm Chores Scheduler h
 
 ### Authentication
 
-[PLACEHOLDER IMAGE: Sign In / Sign Up Screen]
+<img width="425" height="945" alt="Authentication" src="https://github.com/user-attachments/assets/aef63129-1562-4744-8128-15de429aae58" />
 
 ### Dashboard
 
-[PLACEHOLDER IMAGE: Dashboard Screen]
+<img width="425" height="945" alt="Dashboard" src="https://github.com/user-attachments/assets/bd5e6e85-2b90-44ee-8852-579d56415c78" />
 
-### Chores List
+### Viewing Chore
 
-[PLACEHOLDER IMAGE: Chores List Screen]
+<img width="425" height="945" alt="Viewing Chore" src="https://github.com/user-attachments/assets/2f6a9faf-ac06-4e76-8fc5-def9905b0f20" />
 
 ### Chore Analytics
 
-[PLACEHOLDER IMAGE: Chore Analytics Screen]
+<img width="425" height="945" alt="Chore Analytics" src="https://github.com/user-attachments/assets/6ff9a690-d9b7-45f3-8855-086bb0a1db48" />
 
 ### Repair Requests
 
-[PLACEHOLDER IMAGE: Repairs List Screen]
+<img width="425" height="945" alt="Repair Requests" src="https://github.com/user-attachments/assets/426afbc0-35df-4db0-9003-ffb85fd31ab8" />
 
 ### Dorm Management
 
-[PLACEHOLDER IMAGE: Dorm Details / Create Dorm Screen]
+<img width="425" height="945" alt="Dorm Management" src="https://github.com/user-attachments/assets/c4932b05-b70c-4182-9a3d-c2bf91e1821b" />
 
 ### Notifications
 
-[PLACEHOLDER IMAGE: Notifications Screen]
+<img width="425" height="945" alt="Notifications" src="https://github.com/user-attachments/assets/66e1960a-ccbc-4d18-9276-a95224c5c045" />
 
 ### Profile & Settings
 
-[PLACEHOLDER IMAGE: Profile Screen]
+<img width="425" height="945" alt="Profile & Settings" src="https://github.com/user-attachments/assets/4f07ffdb-4200-4d73-a4db-508efbedcf78" />
 
 ## Documentation
 
