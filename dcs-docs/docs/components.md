@@ -6,16 +6,112 @@ The Dorm Chores Scheduler frontend uses a reusable component-based structure bui
 
 In the current project structure, the main reusable components are:
 
+- `ActionPillButton.tsx`
+- `AvailabilityBadge.tsx`
+- `BlockButton.tsx`
 - `Button.tsx`
+- `CategoryPicker.tsx`
 - `CurvedBanner.tsx`
+- `DormCard.tsx`
+- `FilterChip.tsx`
 - `HeaderBackButton.tsx`
+- `InfoPanel.tsx`
 - `InlineButton.tsx`
 - `InlineNotification.tsx`
 - `Input.tsx`
 - `InputCode.tsx`
 - `ListItem.tsx`
+- `Navbar.tsx`
+- `ProfilePicture.tsx`
 - `Selector.tsx`
+- `SortDropdown.tsx`
 - `Spacer.tsx`
+- `ToggleItem.tsx`
+
+---
+
+## ActionPillButton
+
+**File:** `components/ActionPillButton.tsx`
+
+### Purpose
+
+A compact pill button with an icon and label, styled for quick actions.
+
+### Props
+
+- `title: string` - the label displayed inside the pill
+- `iconName: keyof typeof FontAwesome5.glyphMap` - FontAwesome5 icon name
+- `onPress: () => void` - callback triggered on press
+- `variant?: 'primary' | 'secondary'` - visual style (default: 'primary')
+- `style?: ViewStyle` - custom styles for the outer wrapper
+- `disabled?: boolean` - whether the button is disabled (default: false)
+
+### Behaviour
+
+- Supports two visual variants: primary and secondary
+- Shows a pressed border highlight
+- Uses internal `isPressed` state for visual feedback
+
+### Usage Notes
+
+Ideal for small, secondary actions like "Add Member" or "Join Dorm" that don't require a full-width block button.
+
+---
+
+## AvailabilityBadge
+
+**File:** `components/AvailabilityBadge.tsx`
+
+### Purpose
+
+A pill-shaped availability status button for the top bar that allows users to switch between Available and Unavailable.
+
+### Props
+
+- `isAvailable: boolean` - current availability state
+- `onChange: (value: boolean) => void` - called when the user selects a new status
+- `readOnly?: boolean` - disables the dropdown interaction
+- `style?: ViewStyle` - custom styles for the outer wrapper
+
+### Behaviour
+
+- Tapping opens a dropdown menu to switch status
+- Anchors to the right and expands leftward as text grows
+- Saves status changes using `lib/availability`
+- Supports a loading state during hydration
+
+### Usage Notes
+
+Typically placed in the header of the app to allow users to quickly toggle their status.
+
+---
+
+## BlockButton
+
+**File:** `components/BlockButton.tsx`
+
+### Purpose
+
+A quick-action block button styled as a rounded tile with a large icon and label.
+
+### Props
+
+- `title: string` - the label displayed below the icon
+- `iconName: keyof typeof FontAwesome5.glyphMap` - FontAwesome5 icon name
+- `onPress: () => void` - callback triggered on press
+- `style?: ViewStyle` - custom styles for the outer wrapper
+- `disabled?: boolean` - whether the button is disabled
+
+### Behaviour
+
+- Renders as a fixed-size tile (170x74)
+- Consistent press highlight border effect
+- Supports a disabled state with dimmed colours
+
+### Usage Notes
+
+Used on dashboard screens for high-priority actions like "Create Chore" or "Request Repair".
 
 ---
 
@@ -29,12 +125,12 @@ Provides a reusable button for primary and secondary actions across the app.
 
 ### Props
 
-- `title: string` — text shown on the button
-- `onPress: () => void` — function called when the button is pressed
-- `variant?: 'standard' | 'secondary' | 'tertiary' | 'danger'` — visual style
-- `style?: ViewStyle` — optional wrapper styling
-- `textStyle?: TextStyle` — optional text styling
-- `disabled?: boolean` — disables interaction when true
+- `title: string` - text shown on the button
+- `onPress: () => void` - function called when the button is pressed
+- `variant?: 'standard' | 'secondary' | 'tertiary' | 'danger'` - visual style
+- `style?: ViewStyle` - optional wrapper styling
+- `textStyle?: TextStyle` - optional text styling
+- `disabled?: boolean` - disables interaction when true
 
 ### Behaviour
 
@@ -46,6 +142,33 @@ Provides a reusable button for primary and secondary actions across the app.
 ### Usage Notes
 
 This component should be used instead of creating one-off buttons in pages, so button styling remains consistent across the app.
+
+---
+
+## CategoryPicker
+
+**File:** `components/CategoryPicker.tsx`
+
+### Purpose
+
+A wrapping row of pill-shaped category chips for selecting a single chore category.
+
+### Props
+
+- `options: CategoryOption[]` - array of `{ key, label, iconName }` objects
+- `selected: string | null` - the key of the currently selected chip
+- `onSelect: (key: string) => void` - callback triggered when a chip is pressed
+- `style?: ViewStyle` - custom styles for the container
+
+### Behaviour
+
+- Active chip has a dark green background with light green text
+- Inactive chip has a transparent background with a grey border
+- Icons match the text colour of the chip
+
+### Usage Notes
+
+Use this when the user needs to select a category for a chore or filter.
 
 ---
 
@@ -76,6 +199,61 @@ This component is primarily decorative and should be reused anywhere the app nee
 
 ---
 
+## DormCard
+
+**File:** `components/DormCard.tsx`
+
+### Purpose
+
+A full-width card displaying dorm information, statistics, and action buttons.
+
+### Props
+
+- `title: string` - main dorm name
+- `subtitle: string` - supporting context line
+- `stats: { value: string | number; label: string }[]` - array of stat pills
+- `primaryAction: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' }`
+- `secondaryAction?: { label: string; onPress: () => void; variant?: 'primary' | 'secondary' }`
+- `style?: ViewStyle` - optional container overrides
+
+### Behaviour
+
+- Displays stats as prominent pills with labels
+- Supports up to two action buttons with different variants (primary, secondary, danger)
+- Handles text truncation for long titles and subtitles
+
+### Usage Notes
+
+Primary component for the Dorms list page.
+
+---
+
+## FilterChip
+
+**File:** `components/FilterChip.tsx`
+
+### Purpose
+
+A pill-shaped filter chip component for filtering lists.
+
+### Props
+
+- `label: string` - text displayed inside the chip
+- `active?: boolean` - whether the chip is in the active/selected state
+- `onPress: () => void` - callback triggered on press
+- `style?: ViewStyle` - custom styles for the outer wrapper
+
+### Behaviour
+
+- Active state uses a dark green background
+- Inactive state uses a transparent background with a grey border
+
+### Usage Notes
+
+Used for filtering chores or other lists by status or ownership.
+
+---
+
 ## HeaderBackButton
 
 **File:** `components/HeaderBackButton.tsx`
@@ -101,6 +279,33 @@ Provides a reusable back-navigation button for page headers.
 ### Usage Notes
 
 Use this component in screens that need a consistent back button rather than creating custom navigation controls in each page.
+
+---
+
+## InfoPanel
+
+**File:** `components/InfoPanel.tsx`
+
+### Purpose
+
+A stat display tile showing a label and a large prominent value.
+
+### Props
+
+- `label: string` - descriptor shown above the value
+- `value: string | number` - large prominent figure
+- `style?: ViewStyle` - custom styles for the outer wrapper
+- `labelStyle?: TextStyle` - custom label styling
+- `valueStyle?: TextStyle` - custom value styling
+
+### Behaviour
+
+- Default width is 48% to fit two panels side-by-side
+- Fixed height of 100 with rounded corners
+
+### Usage Notes
+
+Ideal for dashboard metrics like "Total chores" or "Completion rate".
 
 ---
 
@@ -206,6 +411,60 @@ This component should be used in pages that render collections of records so tha
 
 ---
 
+## Navbar
+
+**File:** `components/Navbar.tsx`
+
+### Purpose
+
+A bottom navigation bar with icon-and-label tab buttons.
+
+### Props
+
+- `items: NavBarItem[]` - array of 2-4 navigation items
+- `activeKey: string` - the `key` of the currently active tab
+- `style?: ViewStyle` - custom styles for the outer container
+
+### Behaviour
+
+- Displays up to 4 items evenly spaced
+- Active tabs are highlighted and non-interactable
+- Uses FontAwesome5 icons
+
+### Usage Notes
+
+Used as the global navigation component at the bottom of the screen.
+
+---
+
+## ProfilePicture
+
+**File:** `components/ProfilePicture.tsx`
+
+### Purpose
+
+A circular profile picture component with size variants and image upload capabilities.
+
+### Props
+
+- `variant: 'small' | 'large'` - size and behaviour mode
+- `imageUri?: string` - remote or local URI for the image
+- `onPress?: () => void` - (small only) called when tapped
+- `onImageChange?: (uri: string) => void` - (large only) called after successful upload
+- `style?: ViewStyle` - custom styles for the outer wrapper
+
+### Behaviour
+
+- `small` variant acts as a navigation button
+- `large` variant includes a camera overlay for picking and uploading a new photo
+- Falls back to a placeholder silhouette if no image is provided
+
+### Usage Notes
+
+Use the `small` variant in the header and the `large` variant on the profile page.
+
+---
+
 ## Selector
 
 **File:** `components/Selector.tsx`
@@ -216,9 +475,9 @@ Provides a reusable option selector using card-style items.
 
 ### Props
 
-- `options` — array of selectable options
-- `selectedId` — currently selected option id
-- `onSelect` — callback when an option is selected
+- `options` - array of selectable options
+- `selectedId` - currently selected option id
+- `onSelect` - callback when an option is selected
 
 ### Behaviour
 
@@ -229,6 +488,33 @@ Provides a reusable option selector using card-style items.
 ### Usage Notes
 
 This component is useful when the user must choose one option from a small predefined set.
+
+---
+
+## SortDropdown
+
+**File:** `components/SortDropdown.tsx`
+
+### Purpose
+
+A pill-shaped sort chip that opens a modal dropdown with options.
+
+### Props
+
+- `options: string[]` - list of sort options
+- `selected: string` - the currently selected option
+- `onSelect: (option: string) => void` - callback when an option is picked
+- `style?: ViewStyle` - custom styles for the outer wrapper
+
+### Behaviour
+
+- Displays the selected option with a chevron-down icon
+- Opens a full-screen overlay with a selection menu at the bottom
+- Highlights the currently selected option in the menu
+
+### Usage Notes
+
+Used to change the sort order of chore or repair lists.
 
 ---
 
@@ -258,11 +544,40 @@ Use `Spacer` instead of hardcoding random margins between components.
 
 ---
 
+## ToggleItem
+
+**File:** `components/ToggleItem.tsx`
+
+### Purpose
+
+A toggleable list item component with an optional icon and custom toggle switch.
+
+### Props
+
+- `title: string` - main label text
+- `iconName?: keyof FontAwesome5.glyphMap` - optional icon
+- `value: boolean` - current toggle state
+- `onValueChange: (value: boolean) => void` - callback when toggled
+- `disabled?: boolean` - disables interaction and dims the item
+- `style?: object` - custom styles for the container
+
+### Behaviour
+
+- Includes a smooth spring-animated toggle switch
+- Supports an icon-less variant
+- Matches the height and style of `ListItem` when an icon is provided
+
+### Usage Notes
+
+Best used for settings or preferences pages.
+
+---
+
 ## Component Design Summary
 
 The current component system improves the project in four main ways:
 
-1. **Reusability** — shared UI patterns only need to be implemented once
-2. **Consistency** — pages use the same interaction and styling rules
-3. **Maintainability** — UI updates can be made in one place
-4. **Scalability** — future pages can reuse the same building blocks
+1. **Reusability** - shared UI patterns only need to be implemented once
+2. **Consistency** - pages use the same interaction and styling rules
+3. **Maintainability** - UI updates can be made in one place
+4. **Scalability** - future pages can reuse the same building blocks
