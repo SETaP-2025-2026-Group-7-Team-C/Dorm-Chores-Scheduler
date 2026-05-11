@@ -41,18 +41,91 @@ This table stores user-specific data that is not handled by Supabase Auth.
 
 ### Key Fields
 
-- `id` — linked to the Supabase Auth user ID
-- `display_name` — the user’s chosen name
-- `is_manager` — determines whether the user is a manager or student
-- `avatar_url` — stores the profile picture
-- `is_deleted` — indicates if the account has been soft deleted
-- `deleted_at` — stores the time of deletion
+- `id` - linked to the Supabase Auth user ID
+- `display_name` - the user’s chosen name
+- `is_manager` - determines whether the user is a manager or student
+- `avatar_url` - stores the profile picture
+- `is_deleted` - indicates if the account has been soft deleted
+- `deleted_at` - stores the time of deletion
 
 ### Behaviour
 
 - A profile is automatically created when a user signs up
 - User roles are determined using `is_manager`
 - Profile data is used across the app for display and permissions
+
+---
+
+## Dorms & Memberships
+
+**Tables:** `dorms`, `dorm_members`
+
+### Purpose
+
+Manages the creation of dorm groups and tracks which users belong to which dorm.
+
+### Key Fields (`dorms`)
+
+- `id` — unique identifier
+- `name` — display name of the dorm
+- `join_code` — unique code used by students to join the dorm
+- `created_by` — reference to the profile that created the dorm
+
+### Key Fields (`dorm_members`)
+
+- `user_id` — reference to the profile
+- `dorm_id` — reference to the dorm
+- `joined_at` — timestamp of when the user joined
+
+### Behaviour
+
+- A user can only belong to one dorm at a time (enforced by `unique_user_one_dorm` constraint).
+- Managers create dorms and generate join codes for students.
+
+---
+
+## Chores System
+
+**Table:** `chores`
+
+### Purpose
+
+Tracks chore assignments and status within a dorm.
+
+### Key Fields
+
+- `dorm_id` — the dorm this chore belongs to
+- `title` / `description` — details of the task
+- `status` — current state (e.g., `pending`, `completed`)
+- `due_in_days` — relative deadline for the chore
+
+### Behaviour
+
+- Chores are scoped to a specific dorm.
+- Status updates track progress toward completion.
+
+---
+
+## Repair Requests
+
+**Tables:** `repair_requests`, `repair_images`, `repair_status`
+
+### Purpose
+
+Allows users to report and track maintenance issues.
+
+### Key Fields (`repair_requests`)
+
+- `dorm_id` — the dorm where the repair is needed
+- `submitted_by` — user who reported the issue
+- `urgency` — `low`, `medium`, or `high`
+- `status` — `pending`, `in_progress`, `completed`, or `rejected`
+
+### Behaviour
+
+- Users can upload images associated with a repair (`repair_images`).
+- The system maintains a history of status changes (`repair_status`) for auditing.
+- Managers can assign notes and resolution details upon completion.
 
 ---
 
@@ -93,8 +166,8 @@ Stores each user’s notification settings.
 
 ### Structure
 
-- `user_id` — links to the user
-- `preferences` — a JSON object storing notification settings
+- `user_id` - links to the user
+- `preferences` - a JSON object storing notification settings
 
 ### Behaviour
 

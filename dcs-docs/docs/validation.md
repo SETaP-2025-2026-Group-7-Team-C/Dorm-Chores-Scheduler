@@ -174,13 +174,17 @@ The validation system is also expected to reject suspicious input that looks lik
 
 ### Common patterns to detect
 
-Examples of suspicious patterns include:
+The `containsSqlInjection` function scans for several high-risk patterns, including:
+
+- **Keywords**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, `UNION`, `WHERE`, `FROM`.
+- **Comment sequences**: `--` (single line), `/* ... */` (multi-line).
+- **Control characters**: `;` (statement separator), `'` or `"` (string delimiters).
+- **Boolean injection**: Patterns like `' OR '1'='1` or `' AND 1=1`.
+- **System functions**: `exec`, `sp_executesql`, `xp_cmdshell`.
 
 ### Purpose
 
-These checks help prevent users from entering strings that may later be interpreted as executable SQL or otherwise unsafe input.
-
-```
+These checks help prevent users from entering strings that may later be interpreted as executable SQL or otherwise unsafe input, particularly when building dynamic queries or passing data to the backend.
 
 ## Test Coverage
 
@@ -217,4 +221,7 @@ If new validation rules are added later, this file should be updated so contribu
 - where each validator is used
 - which forms depend on it
 - which tests verify it
+
+```
+
 ```

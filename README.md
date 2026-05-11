@@ -6,15 +6,54 @@
 
 ## Project Description
 
-Project Description (To be completed)
+Dorm Chores Scheduler is a cross-platform mobile application built with React Native and Expo, designed to streamline chore management in shared living environments like university dormitories. The app facilitates accountability and organization through features like role-based access, automated scheduling, chore analytics, and real-time notifications.
+
+By centralising chore tracking and maintenance requests, Dorm Chores Scheduler helps students maintain a clean and harmonious living space while providing managers with the tools needed to oversee repair requests effectively.
 
 ## Features
 
-Features (To be completed)
+- **Dorm Management**: Create and join dorms with unique invite codes.
+- **Role-Based Access**: Distinguishes between students and managers for tiered permissions.
+- **Chore Scheduling**: Assign, track, and manage chores with due dates and frequency.
+- **Repair Requests**: Report maintenance issues directly within the dorm context.
+- **Availability Tracking**: Toggle availability status to manage chore assignments.
+- **Analytics & Stats**: View chore completion rates and dorm-wide performance metrics.
+- **Real-time Notifications**: Stay updated on upcoming chores and dorm activities.
+- **Profile Customization**: Manage user profiles with photo uploads and security settings.
 
 ## Preview Images
 
-Preview Images (To be completed)
+### Authentication
+
+[PLACEHOLDER IMAGE: Sign In / Sign Up Screen]
+
+### Dashboard
+
+[PLACEHOLDER IMAGE: Dashboard Screen]
+
+### Chores List
+
+[PLACEHOLDER IMAGE: Chores List Screen]
+
+### Chore Analytics
+
+[PLACEHOLDER IMAGE: Chore Analytics Screen]
+
+### Repair Requests
+
+[PLACEHOLDER IMAGE: Repairs List Screen]
+
+### Dorm Management
+
+[PLACEHOLDER IMAGE: Dorm Details / Create Dorm Screen]
+
+### Notifications
+
+[PLACEHOLDER IMAGE: Notifications Screen]
+
+### Profile & Settings
+
+[PLACEHOLDER IMAGE: Profile Screen]
 
 ## Documentation
 
