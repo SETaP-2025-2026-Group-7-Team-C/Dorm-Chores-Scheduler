@@ -22,6 +22,7 @@ async function notifySafely(
   }
 }
 
+/** Metadata stored alongside a chore. */
 export interface ChoreMeta {
   due_in_days?: number;
   assignedTo?: string | null;
@@ -32,6 +33,7 @@ export interface ChoreMeta {
   rotIdx?: number;
 }
 
+/** Input payload used for chore creation and updates. */
 export interface ChoreData {
   title: string;
   description?: string;
@@ -40,6 +42,7 @@ export interface ChoreData {
   meta?: ChoreMeta;
 }
 
+/** Chore record with database fields and display data. */
 export interface Chore extends ChoreData {
   id: string;
   dorm_id: string;
@@ -47,6 +50,7 @@ export interface Chore extends ChoreData {
   assignedName?: string;
 }
 
+/** Normalizes status values into supported workflow states. */
 function normalizeChoreStatus(status?: string): 'pending' | 'in_progress' | 'completed' {
   const normalized = String(status || '')
     .toLowerCase()
@@ -217,6 +221,7 @@ async function autoAssignUnassignedChores(dormId: string, chores: Chore[]): Prom
   return result.map(withNormalizedStatus);
 }
 
+/** Packs chore data into database payload format. */
 export function packChoreData(data: ChoreData): any {
   const payload: any = {
     title: data.title,
@@ -231,6 +236,7 @@ export function packChoreData(data: ChoreData): any {
   return payload;
 }
 
+/** Parses a database row and extracts embedded metadata. */
 export function parseChore(data: any): Chore {
   const chore: Chore = { ...data };
   if (chore.description && chore.description.includes('___META=')) {
@@ -247,6 +253,7 @@ export function parseChore(data: any): Chore {
   return withNormalizedStatus(chore);
 }
 
+/** Returns chores for a dorm with assignee names populated. */
 export async function getChores(dormId: string): Promise<Chore[]> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -289,6 +296,7 @@ export async function getChores(dormId: string): Promise<Chore[]> {
   return chores;
 }
 
+/** Returns a single chore by id. */
 export async function getChoreById(choreId: string): Promise<Chore | null> {
   if (!choreId) throw new Error('Chore ID is required');
 
@@ -301,6 +309,7 @@ export async function getChoreById(choreId: string): Promise<Chore | null> {
   return parseChore(data);
 }
 
+/** Creates a chore and sends assignment notifications. */
 export async function createChore(dormId: string, choreData: ChoreData): Promise<Chore> {
   if (!dormId) throw new Error('Dorm ID is required');
   if (!choreData.title || choreData.title.trim() === '') {
@@ -390,6 +399,7 @@ export async function createChore(dormId: string, choreData: ChoreData): Promise
   return createdChore;
 }
 
+/** Updates a chore and records audit info. */
 export async function updateChore(
   choreId: string,
   updatedData: Partial<ChoreData>,
@@ -438,6 +448,7 @@ export async function updateChore(
   return updatedChore;
 }
 
+/** Deletes a chore by id. */
 export async function deleteChore(choreId: string): Promise<void> {
   if (!choreId) throw new Error('Chore ID is required');
 
@@ -452,6 +463,7 @@ export async function deleteChore(choreId: string): Promise<void> {
   });
 }
 
+/** Marks a chore as completed and handles follow ups. */
 export async function markChoreComplete(choreId: string): Promise<Chore> {
   if (!choreId) throw new Error('Chore ID is required');
 
@@ -486,6 +498,7 @@ export async function markChoreComplete(choreId: string): Promise<Chore> {
   return completedChore;
 }
 
+/** Updates a chore workflow status. */
 export async function updateChoreWorkflowStatus(
   choreId: string,
   status: 'pending' | 'in_progress' | 'completed',

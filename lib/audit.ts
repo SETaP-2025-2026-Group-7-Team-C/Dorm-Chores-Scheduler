@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 
+/** Fields used to create an audit log entry. */
 export interface AuditEventInput {
   actorId?: string | null;
   dormId?: string | null;
@@ -9,6 +10,7 @@ export interface AuditEventInput {
   payload?: Record<string, any>;
 }
 
+/** Writes an audit log entry and ignores failures. */
 export async function logAuditEvent(event: AuditEventInput): Promise<void> {
   if (!event.entityType || !event.action) return;
 

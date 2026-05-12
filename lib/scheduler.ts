@@ -10,6 +10,7 @@ function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** Returns the Monday start of week as a date string. */
 export function getWeekStartDate(date = new Date()): string {
   const d = new Date(date);
   const day = d.getUTCDay();
@@ -84,6 +85,7 @@ async function notifyWeeklyAssignment(userId: string, choreTitle: string): Promi
   }
 }
 
+/** Generates weekly chores from templates with fair assignment. */
 export async function generateWeeklyAssignments(
   dormId: string,
   actorId: string,

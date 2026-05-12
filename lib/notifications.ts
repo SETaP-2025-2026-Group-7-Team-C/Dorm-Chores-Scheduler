@@ -1,6 +1,7 @@
 import { formatErrorMessage } from './errors';
 import { supabase } from './supabase';
 
+/** Notification preference keys stored per user. */
 export type PreferenceKey =
   | 'new_chore_assignment'
   | 'chore_due_soon'
@@ -15,6 +16,7 @@ export type PreferenceKey =
   | 'account_activity_update';
 
 // Get user notification preferences
+/** Returns saved notification preferences for a user. */
 export async function getNotificationSettings(userId: string) {
   const { data, error } = await supabase
     .from('notification_preferences')
@@ -32,6 +34,7 @@ export async function getNotificationSettings(userId: string) {
 }
 
 // Update notification preferences
+/** Updates notification preferences for a user. */
 export async function updateNotificationSettings(
   userId: string,
   settings: Record<string, boolean>,
@@ -53,6 +56,7 @@ export async function updateNotificationSettings(
 }
 
 // Create in-app notification
+/** Creates an in app notification and records metrics. */
 export async function createInAppNotification(
   userId: string,
   preferenceKey: PreferenceKey,
@@ -132,6 +136,7 @@ export async function createInAppNotification(
 }
 
 // Get in-app notifications
+/** Returns in app notifications for a user. */
 export async function getInAppNotifications(userId: string) {
   const { data, error } = await supabase
     .from('in_app_notifications')
@@ -147,6 +152,7 @@ export async function getInAppNotifications(userId: string) {
 }
 
 // Mark notification as read
+/** Marks a notification as read. */
 export async function markNotificationAsRead(notificationId: string) {
   const { error } = await supabase
     .from('in_app_notifications')

@@ -1,10 +1,12 @@
 import { getChores } from './chores';
 import { supabase } from './supabase';
 
+/** Returns a date string in YYYY MM DD format using UTC. */
 function dateOnly(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** Returns the Monday start of week for a date in UTC. */
 function weekStart(date = new Date()): Date {
   const d = new Date(date);
   const day = d.getUTCDay();
@@ -14,12 +16,14 @@ function weekStart(date = new Date()): Date {
   return d;
 }
 
+/** Returns a new date with a number of days added in UTC. */
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
+/** Summary counts and completion rate for a week window. */
 export interface WeeklyChoreSummary {
   weekStartDate: string;
   weekEndDate: string;
@@ -30,6 +34,7 @@ export interface WeeklyChoreSummary {
   completionRate: number;
 }
 
+/** Per user completion totals across chores. */
 export interface UserCompletionHistoryItem {
   userId: string;
   displayName?: string;
@@ -38,6 +43,7 @@ export interface UserCompletionHistoryItem {
   pendingCount: number;
 }
 
+/** Returns weekly counts and completion rate for a dorm. */
 export async function getWeeklyChoreSummary(
   dormId: string,
   anchorDate = new Date(),
@@ -69,6 +75,7 @@ export async function getWeeklyChoreSummary(
   };
 }
 
+/** Returns per user completion totals for a dorm. */
 export async function getUserCompletionHistory(
   dormId: string,
 ): Promise<UserCompletionHistoryItem[]> {

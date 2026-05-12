@@ -21,6 +21,7 @@ async function notifyReminder(userId: string, count: number): Promise<void> {
   }
 }
 
+/** Sends daily reminder notifications for a dorm. */
 export async function runDailyChoreRemindersForDorm(
   dormId: string,
   runDate = new Date(),

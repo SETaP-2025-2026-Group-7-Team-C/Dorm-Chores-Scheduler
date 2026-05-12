@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatErrorMessage } from './errors';
 import { supabase } from './supabase';
 
+/** Allowed availability status values. */
 export const AVAILABILITY_STATUSES = ['available', 'unavailable'] as const;
 
+/** Availability status union type. */
 export type AvailabilityStatus = (typeof AVAILABILITY_STATUSES)[number];
 
 const DEFAULT_STATUS: AvailabilityStatus = 'available';
@@ -23,6 +25,7 @@ async function getCurrentUserId(): Promise<string | null> {
   return user?.id || null;
 }
 
+/** Returns the current user availability with caching. */
 export async function getAvailabilityStatus(): Promise<AvailabilityStatus> {
   const userId = await getCurrentUserId();
   if (!userId) return DEFAULT_STATUS;
@@ -51,6 +54,7 @@ export async function getAvailabilityStatus(): Promise<AvailabilityStatus> {
   return resolvedStatus;
 }
 
+/** Updates the current user availability and cache. */
 export async function setAvailabilityStatus(status: AvailabilityStatus): Promise<void> {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error('User not authenticated');

@@ -1,6 +1,7 @@
 import { formatErrorMessage } from './errors';
 import { supabase } from './supabase';
 
+/** Template record used for weekly schedule creation. */
 export interface ChoreTemplate {
   id: string;
   dorm_id: string;
@@ -14,6 +15,7 @@ export interface ChoreTemplate {
   updated_at: string;
 }
 
+/** Input for creating a template. */
 export interface CreateChoreTemplateInput {
   title: string;
   description?: string | null;
@@ -21,6 +23,7 @@ export interface CreateChoreTemplateInput {
   default_due_in_days?: number;
 }
 
+/** Input for updating a template. */
 export interface UpdateChoreTemplateInput {
   title?: string;
   description?: string | null;
@@ -29,6 +32,7 @@ export interface UpdateChoreTemplateInput {
   is_active?: boolean;
 }
 
+/** Returns templates for a dorm with optional inactive rows. */
 export async function getChoreTemplates(
   dormId: string,
   includeInactive = false,
@@ -51,6 +55,7 @@ export async function getChoreTemplates(
   return (data || []) as ChoreTemplate[];
 }
 
+/** Creates a new chore template. */
 export async function createChoreTemplate(
   dormId: string,
   userId: string,
@@ -83,6 +88,7 @@ export async function createChoreTemplate(
   return data as ChoreTemplate;
 }
 
+/** Updates fields on a chore template. */
 export async function updateChoreTemplate(
   templateId: string,
   input: UpdateChoreTemplateInput,
@@ -116,6 +122,7 @@ export async function updateChoreTemplate(
   return data as ChoreTemplate;
 }
 
+/** Deletes a chore template by id. */
 export async function deleteChoreTemplate(templateId: string): Promise<void> {
   if (!templateId) throw new Error('Template ID is required');
   const { error } = await supabase.from('chore_templates').delete().eq('id', templateId);
