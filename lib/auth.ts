@@ -9,6 +9,7 @@ import {
   validateSignUpFields,
 } from './validation';
 
+/** Signs in a user with email and password. */
 export async function signInUser(email: string, password: string) {
   const normEmail = normaliseEmail(email);
   validateSignInFields(normEmail, password);
@@ -28,6 +29,7 @@ export async function signInUser(email: string, password: string) {
   return data;
 }
 
+/** Creates a new user account and profile data. */
 export async function signUpUser(
   email: string,
   password: string,
@@ -60,6 +62,7 @@ export async function signUpUser(
   return data;
 }
 
+/** Updates the display name on the profile. */
 export async function updateDisplayName(userId: string, newDisplayName: string) {
   validateDisplayName(newDisplayName);
 
@@ -73,6 +76,7 @@ export async function updateDisplayName(userId: string, newDisplayName: string) 
   }
 }
 
+/** Signs out the current user session. */
 export async function signOutUser() {
   const { error } = await supabase.auth.signOut();
   if (error) {
@@ -80,6 +84,7 @@ export async function signOutUser() {
   }
 }
 
+/** Marks a user profile as deleted without removing the record. */
 export async function softDeleteCurrentUser(userId: string) {
   if (!userId) {
     throw new Error('User ID is required.');
@@ -99,6 +104,7 @@ export async function softDeleteCurrentUser(userId: string) {
     throw new Error(formatErrorMessage(error.message));
   }
 }
+/** Checks if a user profile is marked as deleted. */
 export async function isSoftDeletedUser(userId: string): Promise<boolean> {
   if (!userId) {
     return false;
@@ -120,6 +126,7 @@ export async function isSoftDeletedUser(userId: string): Promise<boolean> {
   return data?.is_deleted === true;
 }
 
+/** Sends a password reset email. */
 export async function resetPassword(email: string) {
   const normEmail = normaliseEmail(email);
   validateResetPasswordFields(normEmail);
@@ -133,6 +140,7 @@ export async function resetPassword(email: string) {
   }
 }
 
+/** Returns the signed in user with profile fields. */
 export async function getCurrentUser() {
   const {
     data: { user },
@@ -163,6 +171,7 @@ export async function getCurrentUser() {
   };
 }
 
+/** Returns the profile role for a user id. */
 export async function getUserRole(userId: string): Promise<'student' | 'manager' | null> {
   if (!userId) return null;
 
@@ -182,6 +191,7 @@ export async function getUserRole(userId: string): Promise<'student' | 'manager'
   return data?.is_manager ? 'manager' : 'student';
 }
 
+/** Returns true if a user session exists. */
 export async function isAuthenticated(): Promise<boolean> {
   const {
     data: { user },
@@ -189,6 +199,7 @@ export async function isAuthenticated(): Promise<boolean> {
   return !!user;
 }
 
+/** Uploads a profile picture and returns the public URL. */
 export async function uploadProfilePicture(userId: string, localUri: string): Promise<string> {
   if (!userId) throw new Error('User ID is required to upload profile picture.');
   if (!localUri) throw new Error('A valid local file URI is required.');

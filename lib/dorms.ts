@@ -45,11 +45,13 @@ async function tryDeleteDormRow(dormId: string) {
   return await supabase.from('dorms').delete().eq('id', dormId).select('id').maybeSingle();
 }
 
+/** Input used when creating or updating a dorm. */
 export interface DormData {
   name: string;
   join_code?: string;
 }
 
+/** Dorm record with identifiers and metadata. */
 export interface Dorm {
   id: string;
   name: string;
@@ -58,12 +60,14 @@ export interface Dorm {
   created_at: string;
 }
 
+/** Membership record for a user in a dorm. */
 export interface DormMember {
   user_id: string;
   dorm_id: string;
   joined_at: string;
 }
 
+/** Aggregated stats for a single dorm. */
 export interface DormStats {
   choreCompletionRate: number;
   openRepairs: number;
@@ -72,6 +76,7 @@ export interface DormStats {
   completedChores: number;
 }
 
+/** Aggregated stats across a manager dorm list. */
 export interface ManagerOverview {
   dormCount: number;
   choreCompletionRate: number;
@@ -79,6 +84,7 @@ export interface ManagerOverview {
   memberCount: number;
 }
 
+/** Parsed values from a manager link payload. */
 export interface ManagerDormLinkPayload {
   dormId: string;
   joinCode: string;
@@ -96,6 +102,7 @@ function toUuidFromCompact(compact: string): string {
   return `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20, 32)}`.toLowerCase();
 }
 
+/** Parses a QR payload into dorm id and join code. */
 export function parseManagerDormLinkPayload(rawPayload: string): ManagerDormLinkPayload {
   if (!rawPayload?.trim()) {
     throw new Error('QR code is empty');
@@ -116,6 +123,7 @@ export function parseManagerDormLinkPayload(rawPayload: string): ManagerDormLink
   return { dormId, joinCode };
 }
 
+/** Creates a QR payload for manager dorm linking. */
 export async function createManagerDormLinkPayload(dormId: string): Promise<string> {
   if (!dormId) {
     throw new Error('Dorm ID is required');
@@ -134,6 +142,7 @@ export async function createManagerDormLinkPayload(dormId: string): Promise<stri
   return `${MANAGER_QR_PREFIX}?${query.toString()}`;
 }
 
+/** Creates a manual manager link code for a dorm. */
 export async function createManagerDormManualCode(dormId: string): Promise<string> {
   if (!dormId) {
     throw new Error('Dorm ID is required');
@@ -159,6 +168,7 @@ export async function createManagerDormManualCode(dormId: string): Promise<strin
   ].join('-');
 }
 
+/** Parses a manual manager code into dorm id and join code. */
 export function parseManagerDormManualCode(manualCode: string): ManagerDormLinkPayload {
   const raw = manualCode.trim().toUpperCase();
   const parts = raw.split('-');
@@ -189,6 +199,7 @@ export function parseManagerDormManualCode(manualCode: string): ManagerDormLinkP
   };
 }
 
+/** Links a dorm to a manager using a QR payload. */
 export async function linkDormToManagerByQr(
   managerUserId: string,
   qrPayload: string,
@@ -245,6 +256,7 @@ export async function linkDormToManagerByQr(
   return updatedDorm as Dorm;
 }
 
+/** Links a dorm to a manager using a join code. */
 export async function linkDormToManagerByJoinCode(
   managerUserId: string,
   joinCode: string,
@@ -310,6 +322,7 @@ export async function linkDormToManagerByJoinCode(
   return updatedDorm as Dorm;
 }
 
+/** Links a dorm to a manager using a manual code. */
 export async function linkDormToManagerByManualCode(
   managerUserId: string,
   manualCode: string,
@@ -366,6 +379,7 @@ export async function linkDormToManagerByManualCode(
   return updatedDorm as Dorm;
 }
 
+/** Returns a dorm by id or null if missing. */
 export async function getDormById(dormId: string): Promise<Dorm | null> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -378,6 +392,7 @@ export async function getDormById(dormId: string): Promise<Dorm | null> {
   return data as Dorm;
 }
 
+/** Returns dorms owned by a manager user. */
 export async function getDormsByManager(userId: string): Promise<Dorm[]> {
   if (!userId) throw new Error('User ID is required');
 
@@ -391,6 +406,7 @@ export async function getDormsByManager(userId: string): Promise<Dorm[]> {
   return data as Dorm[];
 }
 
+/** Returns members for a dorm. */
 export async function getDormMembers(dormId: string): Promise<DormMember[]> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -404,6 +420,7 @@ export async function getDormMembers(dormId: string): Promise<DormMember[]> {
   return data as DormMember[];
 }
 
+/** Generates a join code for dorm invites. */
 export async function generateInviteCode(): Promise<string> {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
@@ -413,6 +430,7 @@ export async function generateInviteCode(): Promise<string> {
   return result;
 }
 
+/** Creates a dorm and enrolls the manager. */
 export async function createDorm(dormData: DormData, userId: string): Promise<Dorm> {
   if (!dormData.name || dormData.name.trim() === '') {
     throw new Error('Dorm name is required');
@@ -459,6 +477,7 @@ export async function createDorm(dormData: DormData, userId: string): Promise<Do
   return data as Dorm;
 }
 
+/** Updates a dorm name or join code fields. */
 export async function updateDorm(dormId: string, updatedData: Partial<DormData>): Promise<Dorm> {
   if (!dormId) throw new Error('Dorm ID is required');
   if (updatedData.name !== undefined && updatedData.name.trim() === '') {
@@ -479,6 +498,7 @@ export async function updateDorm(dormId: string, updatedData: Partial<DormData>)
   return data as Dorm;
 }
 
+/** Deletes a dorm if the requesting user is the owner. */
 export async function deleteDorm(dormId: string): Promise<void> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -526,6 +546,7 @@ export async function deleteDorm(dormId: string): Promise<void> {
   }
 }
 
+/** Adds a user to a dorm by join code. */
 export async function joinDorm(userId: string, joinCode: string): Promise<DormMember> {
   if (!userId) throw new Error('User ID is required');
   if (!joinCode) throw new Error('Join code is required');
@@ -571,6 +592,7 @@ export async function joinDorm(userId: string, joinCode: string): Promise<DormMe
   return data as DormMember;
 }
 
+/** Removes a user from a dorm membership. */
 export async function leaveDorm(userId: string, dormId: string): Promise<void> {
   if (!userId) throw new Error('User ID is required');
   if (!dormId) throw new Error('Dorm ID is required');
@@ -583,6 +605,7 @@ export async function leaveDorm(userId: string, dormId: string): Promise<void> {
   if (error) throw new Error(formatErrorMessage(error.message));
 }
 
+/** Transfers dorm ownership before a manager leaves. */
 export async function leaveDormAsManager(managerUserId: string, dormId: string): Promise<void> {
   if (!managerUserId) throw new Error('Manager user ID is required');
   if (!dormId) throw new Error('Dorm ID is required');
@@ -657,6 +680,7 @@ export async function leaveDormAsManager(managerUserId: string, dormId: string):
   }
 }
 
+/** Adds a user to a dorm by direct invite. */
 export async function inviteUserToDorm(userId: string, dormId: string): Promise<DormMember> {
   if (!userId) throw new Error('User ID is required');
   if (!dormId) throw new Error('Dorm ID is required');
@@ -692,6 +716,7 @@ export async function inviteUserToDorm(userId: string, dormId: string): Promise<
   return data as DormMember;
 }
 
+/** Returns the current active dorm id for the user. */
 export async function getActiveDormId(): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user?.id) return null;
@@ -725,12 +750,14 @@ export async function getActiveDormId(): Promise<string | null> {
   return members[0].dorm_id;
 }
 
+/** Persists the active dorm id for the user. */
 export async function setActiveDormId(dormId: string): Promise<void> {
   const user = await getCurrentUser();
   if (!user?.id) return;
   await AsyncStorage.setItem(`active_dorm_id_${user.id}`, dormId);
 }
 
+/** Returns aggregated counts for a dorm. */
 export async function getDormStats(dormId: string): Promise<DormStats> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -776,6 +803,7 @@ export async function getDormStats(dormId: string): Promise<DormStats> {
   };
 }
 
+/** Returns a summary across all manager dorms. */
 export async function getManagerOverview(managerId: string): Promise<ManagerOverview> {
   if (!managerId) throw new Error('Manager ID is required');
 

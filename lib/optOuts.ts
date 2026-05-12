@@ -1,6 +1,7 @@
 import { formatErrorMessage } from './errors';
 import { supabase } from './supabase';
 
+/** Opt out record for a user and optional category. */
 export interface ChoreOptOut {
   id: string;
   user_id: string;
@@ -11,6 +12,7 @@ export interface ChoreOptOut {
   created_at: string;
 }
 
+/** Returns opt outs for a user in a dorm. */
 export async function getChoreOptOuts(userId: string, dormId: string): Promise<ChoreOptOut[]> {
   if (!userId) throw new Error('User ID is required');
   if (!dormId) throw new Error('Dorm ID is required');
@@ -26,6 +28,7 @@ export async function getChoreOptOuts(userId: string, dormId: string): Promise<C
   return (data || []) as ChoreOptOut[];
 }
 
+/** Returns opt outs for all users in a dorm. */
 export async function getDormChoreOptOuts(dormId: string): Promise<ChoreOptOut[]> {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -58,6 +61,7 @@ export async function getDormChoreOptOuts(dormId: string): Promise<ChoreOptOut[]
   }));
 }
 
+/** Creates a new opt out record. */
 export async function createChoreOptOut(
   userId: string,
   dormId: string,
@@ -84,6 +88,7 @@ export async function createChoreOptOut(
   return data as ChoreOptOut;
 }
 
+/** Deletes an opt out record by id. */
 export async function deleteChoreOptOut(optOutId: string): Promise<void> {
   if (!optOutId) throw new Error('Opt-out ID is required');
   const { error } = await supabase.from('chore_opt_outs').delete().eq('id', optOutId);

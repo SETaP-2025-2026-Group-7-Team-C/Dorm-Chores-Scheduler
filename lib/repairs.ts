@@ -1,8 +1,9 @@
+import { logAuditEvent } from './audit';
 import { formatErrorMessage } from './errors';
 import { createInAppNotification } from './notifications';
-import { logAuditEvent } from './audit';
 import { supabase } from './supabase';
 
+/** Input for creating a repair request. */
 export interface RepairRequestData {
   title: string;
   description: string;
@@ -10,11 +11,13 @@ export interface RepairRequestData {
   urgency?: 'low' | 'medium' | 'high';
 }
 
+/** Fields allowed when updating a repair request. */
 export interface RepairRequestUpdateData extends Partial<RepairRequestData> {
   status?: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'resolved';
   resolution_notes?: string;
 }
 
+/** Workflow status used by the UI layer. */
 export type RepairWorkflowStatus = 'pending' | 'in_progress' | 'resolved';
 
 function toDbRepairStatus(status: string): string {
@@ -209,6 +212,7 @@ export async function deleteRepairRequest(requestId: string) {
   }
 }
 
+/** Returns all repair requests for a dorm. */
 export async function getRepairRequests(dormId: string) {
   if (!dormId) throw new Error('Dorm ID is required');
 
@@ -222,6 +226,7 @@ export async function getRepairRequests(dormId: string) {
 
   return data;
 }
+/** Returns a repair request by id. */
 export async function getRepairRequestById(requestId: string) {
   if (!requestId) throw new Error('Request ID is required');
 
@@ -238,6 +243,7 @@ export async function getRepairRequestById(requestId: string) {
 
   return data;
 }
+/** Returns repair requests submitted by a user. */
 export async function getRepairRequestsByReporter(userId: string) {
   if (!userId) throw new Error('User ID is required');
 
@@ -252,6 +258,7 @@ export async function getRepairRequestsByReporter(userId: string) {
   return data;
 }
 
+/** Updates workflow status and notifies the reporter. */
 export async function updateRepairStatus(requestId: string, status: RepairWorkflowStatus) {
   if (!requestId) {
     throw new Error('Request ID is required');
